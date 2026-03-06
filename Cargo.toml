@@ -32,6 +32,9 @@ egui_extras = { version = "0.31", features = ["datepicker"], optional = true }
 image = { version = "0.25", default-features = false, features = ["png"], optional = true }
 rfd = { version = "0.15", optional = true }
 
+[build-dependencies]
+image = { version = "0.25", default-features = false, features = ["png", "ico"] }
+
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1"
 

@@ -1,6 +1,7 @@
 # Rust
 /target
 *.pdb
+icon.ico
 
 # IDE
 .vscode/

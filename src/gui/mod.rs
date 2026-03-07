@@ -8,14 +8,14 @@ use std::path::PathBuf;
 pub fn launch(mft_path: Option<PathBuf>) {
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
-            .with_title("ResidentSpecter - Resident Hunter")
+            .with_title("ResidentReaper - Resident Hunter")
             .with_inner_size([1200.0, 800.0])
             .with_icon(load_icon()),
         ..Default::default()
     };
 
     eframe::run_native(
-        "ResidentSpecter",
+        "ResidentReaper",
         options,
         Box::new(move |cc| {
             Ok(Box::new(app::ResidentHunterApp::new(cc, mft_path)))

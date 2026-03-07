@@ -3,7 +3,7 @@ use std::path::Path;
 use byteorder::{LittleEndian, ReadBytesExt};
 use memmap2::Mmap;
 
-use super::types::{Result, SpecterError};
+use super::types::{Result, ReaperError};
 
 /// Parsed USN_RECORD_V2 entry.
 pub struct UsnRecord {
@@ -210,7 +210,7 @@ fn parse_usn_v2(data: &[u8], offset: usize, _record_len: usize) -> Result<UsnRec
     let name_start = offset + file_name_offset;
     let name_end = name_start + file_name_length;
     if name_end > data.len() {
-        return Err(SpecterError::UsnParse("Filename extends beyond data".into()));
+        return Err(ReaperError::UsnParse("Filename extends beyond data".into()));
     }
     let name = decode_utf16le(&data[name_start..name_end]);
     let extension = extract_extension_dotted(&name);
@@ -252,7 +252,7 @@ fn parse_usn_v3(data: &[u8], offset: usize, _record_len: usize) -> Result<UsnRec
     // 76: FileName (variable, UTF-16LE)
 
     if offset + 76 > data.len() {
-        return Err(SpecterError::UsnParse("V3 record too short".into()));
+        return Err(ReaperError::UsnParse("V3 record too short".into()));
     }
 
     // For V3, use lower 64 bits of 128-bit reference (same decomposition)
@@ -275,7 +275,7 @@ fn parse_usn_v3(data: &[u8], offset: usize, _record_len: usize) -> Result<UsnRec
     let name_start = offset + file_name_offset;
     let name_end = name_start + file_name_length;
     if name_end > data.len() {
-        return Err(SpecterError::UsnParse("V3 filename extends beyond data".into()));
+        return Err(ReaperError::UsnParse("V3 filename extends beyond data".into()));
     }
     let name = decode_utf16le(&data[name_start..name_end]);
     let extension = extract_extension_dotted(&name);

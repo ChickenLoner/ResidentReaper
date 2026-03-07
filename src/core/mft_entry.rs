@@ -4,7 +4,7 @@ use byteorder::{LittleEndian, ReadBytesExt};
 use std::io::Cursor;
 
 use super::ntfs::{self, AttributeType};
-use super::types::SpecterError;
+use super::types::ReaperError;
 
 /// Parsed MFT entry header.
 #[derive(Debug, Clone)]
@@ -65,15 +65,15 @@ pub struct MftEntry {
 
 impl MftEntry {
     /// Parse an MFT entry from a raw buffer. Applies fixup array.
-    pub fn from_buffer(mut buffer: Vec<u8>, entry_number: u64) -> Result<Self, SpecterError> {
+    pub fn from_buffer(mut buffer: Vec<u8>, entry_number: u64) -> Result<Self, ReaperError> {
         if buffer.len() < 56 {
-            return Err(SpecterError::MftParse("Buffer too small for MFT entry".into()));
+            return Err(ReaperError::MftParse("Buffer too small for MFT entry".into()));
         }
 
         let header = parse_entry_header(&buffer, entry_number)?;
 
         if !header.is_valid() {
-            return Err(SpecterError::MftParse(format!(
+            return Err(ReaperError::MftParse(format!(
                 "Invalid entry signature for entry {}",
                 entry_number
             )));
@@ -99,15 +99,15 @@ impl MftEntry {
 }
 
 /// Parse the 56-byte MFT entry header.
-fn parse_entry_header(data: &[u8], entry_number: u64) -> Result<EntryHeader, SpecterError> {
+fn parse_entry_header(data: &[u8], entry_number: u64) -> Result<EntryHeader, ReaperError> {
     let mut c = Cursor::new(data);
 
     let mut signature = [0u8; 4];
     std::io::Read::read_exact(&mut c, &mut signature)
-        .map_err(|e| SpecterError::MftParse(e.to_string()))?;
+        .map_err(|e| ReaperError::MftParse(e.to_string()))?;
 
     if signature != ntfs::SIGNATURE_FILE && signature != ntfs::SIGNATURE_BAAD && signature != [0; 4] {
-        return Err(SpecterError::MftParse(format!(
+        return Err(ReaperError::MftParse(format!(
             "Unknown signature {:?} at entry {}",
             signature, entry_number
         )));

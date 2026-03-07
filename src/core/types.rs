@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum SpecterError {
+pub enum ReaperError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
@@ -20,14 +20,14 @@ pub enum SpecterError {
 }
 
 #[cfg(feature = "cli")]
-impl From<csv::Error> for SpecterError {
+impl From<csv::Error> for ReaperError {
     fn from(e: csv::Error) -> Self {
-        SpecterError::Csv(e.to_string())
+        ReaperError::Csv(e.to_string())
     }
 }
 
 
-pub type Result<T> = std::result::Result<T, SpecterError>;
+pub type Result<T> = std::result::Result<T, ReaperError>;
 
 /// Format a chrono DateTime<Utc> to MFTECmd format: yyyy-MM-dd HH:mm:ss.fffffff
 pub fn format_datetime_mftecmd(dt: &DateTime<Utc>) -> String {

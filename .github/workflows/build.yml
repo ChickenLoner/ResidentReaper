@@ -22,8 +22,8 @@ jobs:
       - name: Upload CLI binary
         uses: actions/upload-artifact@v4
         with:
-          name: ResidentSpecter-windows-cli
-          path: target/release/resident-specter.exe
+          name: ResidentReaper-windows-cli
+          path: target/release/resident-reaper.exe
 
   build-linux:
     runs-on: ubuntu-latest
@@ -52,5 +52,5 @@ jobs:
       - name: Upload CLI binary
         uses: actions/upload-artifact@v4
         with:
-          name: ResidentSpecter-linux-cli
-          path: target/release/resident-specter
+          name: ResidentReaper-linux-cli
+          path: target/release/resident-reaper

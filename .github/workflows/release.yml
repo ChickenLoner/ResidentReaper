@@ -20,13 +20,13 @@ jobs:
 
       - name: Rename binary
         run: |
-          cp target/release/resident-specter.exe ResidentSpecter.exe
+          cp target/release/resident-reaper.exe ResidentReaper.exe
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-binary
-          path: ResidentSpecter.exe
+          path: ResidentReaper.exe
 
   build-linux:
     runs-on: ubuntu-latest
@@ -51,13 +51,13 @@ jobs:
 
       - name: Rename binary
         run: |
-          cp target/release/resident-specter ResidentSpecter
+          cp target/release/resident-reaper ResidentReaper
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: linux-binary
-          path: ResidentSpecter
+          path: ResidentReaper
 
   release:
     needs: [build-windows, build-linux]
@@ -82,5 +82,5 @@ jobs:
         with:
           generate_release_notes: true
           files: |
-            artifacts/windows/ResidentSpecter.exe
-            artifacts/linux/ResidentSpecter
+            artifacts/windows/ResidentReaper.exe
+            artifacts/linux/ResidentReaper

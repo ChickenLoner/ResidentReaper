@@ -9,7 +9,7 @@ use crate::core::types::Result;
 
 #[derive(Parser)]
 #[command(
-    name = "ResidentSpecter",
+    name = "ResidentReaper",
     version,
     about = "NTFS forensic tool - MFT/USN parser and resident data hunter"
 )]

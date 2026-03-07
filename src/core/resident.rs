@@ -4,7 +4,7 @@ use std::path::Path;
 use super::attributes::{FileNameInfo, StandardInfo};
 use super::mft_entry::MftEntry;
 use super::ntfs::{AttributeType, FileNamespace};
-use super::types::{Result, SpecterError};
+use super::types::{Result, ReaperError};
 
 /// A resident data entry found in an MFT record.
 #[derive(Clone)]
@@ -172,11 +172,11 @@ struct PathEntry {
 
 fn detect_entry_size(data: &[u8]) -> Result<usize> {
     if data.len() < 56 {
-        return Err(SpecterError::MftParse("MFT file too small".into()));
+        return Err(ReaperError::MftParse("MFT file too small".into()));
     }
     let entry_size = u32::from_le_bytes([data[28], data[29], data[30], data[31]]) as usize;
     if entry_size == 0 || entry_size > 16384 {
-        return Err(SpecterError::MftParse(format!(
+        return Err(ReaperError::MftParse(format!(
             "Invalid entry size: {}",
             entry_size
         )));

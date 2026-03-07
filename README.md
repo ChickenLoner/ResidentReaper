@@ -1,24 +1,24 @@
 <p align="center">
-  <img src="icon.png" alt="ResidentSpecter" width="180"/>
+  <img src="icon.png" alt="ResidentReaper" width="180"/>
 </p>
 
-<h1 align="center">ResidentSpecter</h1>
+<h1 align="center">ResidentReaper</h1>
 
 <p align="center">
   A fast NTFS forensic tool written in Rust — parses <code>$MFT</code> and <code>$J</code> (USN Journal) artifacts, and hunts for resident data hidden inside MFT entries.
 </p>
 
 <p align="center">
-  <a href="https://github.com/ChickenLoner/ResidentSpecter/releases"><img src="https://img.shields.io/github/v/release/ChickenLoner/ResidentSpecter?style=flat-square" alt="Release"/></a>
+  <a href="https://github.com/ChickenLoner/ResidentReaper/releases"><img src="https://img.shields.io/github/v/release/ChickenLoner/ResidentReaper?style=flat-square" alt="Release"/></a>
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-blue?style=flat-square" alt="Platform"/>
   <img src="https://img.shields.io/badge/language-Rust-orange?style=flat-square" alt="Rust"/>
 </p>
 
 ---
 
-## What is ResidentSpecter?
+## What is ResidentReaper?
 
-ResidentSpecter is a DFIR tool inspired by [MFTECmd](https://github.com/EricZimmerman/MFTECmd) by Eric Zimmerman. It reconstructs the full lifecycle of files on NTFS systems by parsing `$MFT` and `$J` (USN Journal) artifacts.
+ResidentReaper is a DFIR tool inspired by [MFTECmd](https://github.com/EricZimmerman/MFTECmd) by Eric Zimmerman. It reconstructs the full lifecycle of files on NTFS systems by parsing `$MFT` and `$J` (USN Journal) artifacts.
 
 It operates in three modes:
 
@@ -30,7 +30,7 @@ It operates in three modes:
 
 ### MFTECmd Compatibility
 
-ResidentSpecter's CSV output is designed to be a drop-in replacement for MFTECmd:
+ResidentReaper's CSV output is designed to be a drop-in replacement for MFTECmd:
 
 | Metric | $MFT | $J (USN Journal) |
 |--------|------|-------------------|
@@ -45,39 +45,39 @@ ResidentSpecter's CSV output is designed to be a drop-in replacement for MFTECmd
 
 ## Download
 
-Grab the latest binaries from the [Releases](https://github.com/ChickenLoner/ResidentSpecter/releases) page:
+Grab the latest binaries from the [Releases](https://github.com/ChickenLoner/ResidentReaper/releases) page:
 
 | Platform | File |
 |----------|------|
-| Windows  | `ResidentSpecter.exe` |
-| Linux    | `ResidentSpecter` |
+| Windows  | `ResidentReaper.exe` |
+| Linux    | `ResidentReaper` |
 
 ## Usage
 
 ### Parse $MFT to CSV
 
 ```bash
-ResidentSpecter mft -f <path_to_$MFT> -o output.csv
+ResidentReaper mft -f <path_to_$MFT> -o output.csv
 ```
 
 ### Parse $J (USN Journal) to CSV
 
 ```bash
-ResidentSpecter usn -f <path_to_$J> -o usn_output.csv
+ResidentReaper usn -f <path_to_$J> -o usn_output.csv
 ```
 
 ### Parse $J with parent path resolution (provide $MFT)
 
 ```bash
-ResidentSpecter usn -f <path_to_$J> -o usn_output.csv --mft <path_to_$MFT>
+ResidentReaper usn -f <path_to_$J> -o usn_output.csv --mft <path_to_$MFT>
 ```
 
 ### Resident Hunter (GUI)
 
 ```bash
-ResidentSpecter hunt
+ResidentReaper hunt
 # Or pre-load an MFT file:
-ResidentSpecter hunt -f <path_to_$MFT>
+ResidentReaper hunt -f <path_to_$MFT>
 ```
 
 The GUI lets you:
@@ -119,7 +119,7 @@ cargo build --release
 cargo build --release --features gui
 ```
 
-The binary will be at `target/release/resident-specter.exe` (Windows) or `target/release/resident-specter` (Linux).
+The binary will be at `target/release/resident-reaper.exe` (Windows) or `target/release/resident-reaper` (Linux).
 
 ### Linux GUI Dependencies
 

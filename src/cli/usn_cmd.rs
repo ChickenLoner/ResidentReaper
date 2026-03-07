@@ -13,7 +13,7 @@ use super::UsnArgs;
 
 pub fn run(args: UsnArgs) -> Result<()> {
     eprintln!(
-        "ResidentSpecter - Parsing $J: {}",
+        "ResidentReaper - Parsing $J: {}",
         args.file.display()
     );
 
@@ -53,7 +53,7 @@ pub fn run(args: UsnArgs) -> Result<()> {
 
         let row = UsnCsvRow::from_record(record, parent_path, source_file.clone());
         csv_writer.serialize(&row).map_err(|e| {
-            crate::core::types::SpecterError::Csv(e.to_string())
+            crate::core::types::ReaperError::Csv(e.to_string())
         })?;
 
         count += 1;
@@ -65,7 +65,7 @@ pub fn run(args: UsnArgs) -> Result<()> {
     })?;
 
     csv_writer.flush().map_err(|e| {
-        crate::core::types::SpecterError::Io(e)
+        crate::core::types::ReaperError::Io(e)
     })?;
 
     pb.finish_with_message("done");

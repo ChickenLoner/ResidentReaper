@@ -1,5 +1,5 @@
 [package]
-name = "resident-specter"
+name = "resident-reaper"
 version = "0.1.0"
 edition = "2021"
 description = "NTFS forensic tool - MFT/USN parser and resident data hunter"

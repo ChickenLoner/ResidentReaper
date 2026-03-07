@@ -21,7 +21,7 @@ use super::attributes::{
 };
 use super::mft_entry::MftEntry;
 use super::ntfs::{self, AttributeType};
-use super::types::{Result, SpecterError};
+use super::types::{Result, ReaperError};
 
 /// Information extracted from an MFT entry for CSV output.
 /// Matches MFTECmd's 34 CSV columns exactly.
@@ -491,11 +491,11 @@ pub fn get_entry_count(mft_path: &Path) -> Result<u64> {
 /// Detect the MFT entry size from the first entry header.
 fn detect_entry_size(data: &[u8]) -> Result<usize> {
     if data.len() < 56 {
-        return Err(SpecterError::MftParse("MFT file too small".into()));
+        return Err(ReaperError::MftParse("MFT file too small".into()));
     }
     let entry_size = u32::from_le_bytes([data[28], data[29], data[30], data[31]]) as usize;
     if entry_size == 0 || entry_size > 16384 {
-        return Err(SpecterError::MftParse(format!(
+        return Err(ReaperError::MftParse(format!(
             "Invalid entry size: {}",
             entry_size
         )));

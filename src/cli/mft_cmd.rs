@@ -11,7 +11,7 @@ use super::MftArgs;
 
 pub fn run(args: MftArgs) -> Result<()> {
     eprintln!(
-        "ResidentSpecter - Parsing $MFT: {}",
+        "ResidentReaper - Parsing $MFT: {}",
         args.file.display()
     );
 
@@ -36,7 +36,7 @@ pub fn run(args: MftArgs) -> Result<()> {
     mft_parser::parse_mft_entries(&args.file, args.allocated_only, |info| {
         let row: MftCsvRow = info.into();
         csv_writer.serialize(&row).map_err(|e| {
-            crate::core::types::SpecterError::Csv(e.to_string())
+            crate::core::types::ReaperError::Csv(e.to_string())
         })?;
 
         count += 1;
@@ -48,7 +48,7 @@ pub fn run(args: MftArgs) -> Result<()> {
     })?;
 
     csv_writer.flush().map_err(|e| {
-        crate::core::types::SpecterError::Io(e)
+        crate::core::types::ReaperError::Io(e)
     })?;
 
     pb.finish_with_message("done");

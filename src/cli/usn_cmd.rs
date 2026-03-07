@@ -25,6 +25,9 @@ pub fn run(args: UsnArgs) -> Result<()> {
         HashMap::new()
     };
 
+    // Source file name (MFTECmd uses the path as provided on command line)
+    let source_file = args.file.display().to_string();
+
     // Get file size for progress
     let file_size = std::fs::metadata(&args.file)?.len();
     let pb = ProgressBar::new(file_size);
@@ -48,7 +51,7 @@ pub fn run(args: UsnArgs) -> Result<()> {
             .cloned()
             .unwrap_or_default();
 
-        let row = UsnCsvRow::from_record(record, parent_path);
+        let row = UsnCsvRow::from_record(record, parent_path, source_file.clone());
         csv_writer.serialize(&row).map_err(|e| {
             crate::core::types::SpecterError::Csv(e.to_string())
         })?;
@@ -81,12 +84,15 @@ fn build_path_map(mft_path: &std::path::Path) -> Result<HashMap<u64, String>> {
     let mut map = HashMap::new();
 
     mft_parser::parse_mft_entries(mft_path, false, |info| {
-        let full_path = if info.parent_path == "." || info.parent_path == "\\" {
-            format!("\\{}", info.file_name)
-        } else {
-            format!("{}\\{}", info.parent_path, info.file_name)
-        };
-        map.insert(info.entry_number, full_path);
+        // Only store non-ADS rows for path lookup
+        if !info.is_ads {
+            let full_path = if info.parent_path == "." {
+                format!(".\\{}", info.file_name)
+            } else {
+                format!("{}\\{}", info.parent_path, info.file_name)
+            };
+            map.insert(info.entry_number, full_path);
+        }
         Ok(())
     })?;
 

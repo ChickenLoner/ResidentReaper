@@ -26,11 +26,6 @@ impl From<csv::Error> for SpecterError {
     }
 }
 
-impl From<mft::err::Error> for SpecterError {
-    fn from(e: mft::err::Error) -> Self {
-        SpecterError::MftParse(e.to_string())
-    }
-}
 
 pub type Result<T> = std::result::Result<T, SpecterError>;
 

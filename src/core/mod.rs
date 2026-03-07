@@ -1,4 +1,7 @@
 pub mod types;
+pub mod ntfs;
+pub mod mft_entry;
+pub mod attributes;
 pub mod mft_parser;
 pub mod mft_csv;
 pub mod usn_parser;

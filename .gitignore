@@ -16,5 +16,9 @@ Thumbs.db
 # Claude
 .claude/
 
+# Reference source code
+/MFTECmd/
+/MFT/
+
 # Environment
 .env

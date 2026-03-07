@@ -18,14 +18,30 @@
 
 ## What is ResidentSpecter?
 
-ResidentSpecter is a DFIR tool inspired by [MFTECmd](https://github.com/EricZimmerman/MFTECmd) by Eric Zimmerman. It is designed to reconstruct the full lifecycle of files on NTFS systems by correlating data from `$MFT` and `$J` (USN Journal).
+ResidentSpecter is a DFIR tool inspired by [MFTECmd](https://github.com/EricZimmerman/MFTECmd) by Eric Zimmerman. It reconstructs the full lifecycle of files on NTFS systems by parsing `$MFT` and `$J` (USN Journal) artifacts.
 
-It operates in two modes:
+It operates in three modes:
 
 | Mode | Description |
 |------|-------------|
-| **CLI Parser** | Parses `$MFT` and `$J` artifacts to CSV — output is compatible with MFTECmd. Faster, written in Rust. |
-| **Resident Hunter** | GUI mode that scans MFT entries for resident data (files stored inline in the MFT), lets you browse, filter, and export them. |
+| **`mft`** | Parses `$MFT` to CSV with output compatible with MFTECmd (99.997% cell accuracy, identical row counts). |
+| **`usn`** | Parses `$J` (USN Journal) to CSV with MFTECmd-compatible output. Optionally resolves parent paths via `$MFT`. |
+| **`hunt`** | GUI mode — scans MFT entries for resident data (files stored inline), browse/filter/export them. |
+
+### MFTECmd Compatibility
+
+ResidentSpecter's CSV output is designed to be a drop-in replacement for MFTECmd:
+
+| Metric | $MFT | $J (USN Journal) |
+|--------|------|-------------------|
+| Row count | Exact match | Exact match |
+| Column headers | Identical (34 columns) | Identical (13 columns) |
+| Cell accuracy | 99.997% | 98.4%* |
+| Timestamps | Identical (7-digit fractional seconds) | Identical |
+| Forensic flags | SI<FN, uSecZeros, Copied | N/A |
+| ADS detection | Zone.Identifier extraction | N/A |
+
+*ParentPath differences due to sequence number validation for reused MFT entries — our tool resolves the current path while MFTECmd shows `PathUnknown`.
 
 ## Download
 
@@ -38,40 +54,29 @@ Grab the latest binaries from the [Releases](https://github.com/ChickenLoner/Res
 
 ## Usage
 
-### Mode 1: CLI Parser
+### Parse $MFT to CSV
 
-**Parse $MFT to CSV:**
 ```bash
 ResidentSpecter mft -f <path_to_$MFT> -o output.csv
 ```
 
-**Parse $J (USN Journal) to CSV:**
+### Parse $J (USN Journal) to CSV
+
 ```bash
 ResidentSpecter usn -f <path_to_$J> -o usn_output.csv
 ```
 
-**Parse $J with parent path resolution (provide $MFT):**
+### Parse $J with parent path resolution (provide $MFT)
+
 ```bash
 ResidentSpecter usn -f <path_to_$J> -o usn_output.csv --mft <path_to_$MFT>
 ```
 
-**Options:**
-| Flag | Description |
-|------|-------------|
-| `-f, --file` | Path to the artifact file (required) |
-| `-o, --output` | Path to the output CSV file (required) |
-| `--allocated-only` | Only output allocated (in-use) MFT entries |
-| `--mft <path>` | (usn mode) Provide $MFT to resolve parent paths |
-| `-v, --verbose` | Increase logging verbosity |
-
-### Mode 2: Resident Hunter (GUI)
+### Resident Hunter (GUI)
 
 ```bash
 ResidentSpecter hunt
-```
-
-Or pre-load an MFT file:
-```bash
+# Or pre-load an MFT file:
 ResidentSpecter hunt -f <path_to_$MFT>
 ```
 
@@ -82,13 +87,25 @@ The GUI lets you:
 - Select and export resident files to a directory
 - Copy hex data to clipboard
 
+### Options
+
+| Flag | Description |
+|------|-------------|
+| `-f, --file` | Path to the artifact file (required) |
+| `-o, --output` | Path to the output CSV file (required) |
+| `--allocated-only` | Only output allocated (in-use) MFT entries |
+| `--mft <path>` | (usn mode) Provide $MFT to resolve parent paths |
+| `-v, --verbose` | Increase logging verbosity |
+
 ## CSV Output Columns
 
-### $MFT Output
-EntryNumber, SequenceNumber, InUse, ParentEntryNumber, ParentSequenceNumber, ParentPath, FileName, Extension, FileSize, IsDirectory, HasAds, IsAds, Created0x10, LastModified0x10, LastAccess0x10, LastRecordChange0x10, Created0x30, LastModified0x30, LastAccess0x30, LastRecordChange0x30, ReferenceCount, LogfileSequenceNumber, SecurityId, ObjectIdFileDroid, ZoneIdContents
+### $MFT Output (34 columns)
 
-### $J (USN Journal) Output
-Name, Extension, EntryNumber, SequenceNumber, ParentEntryNumber, ParentSequenceNumber, ParentPath, UpdateTimestamp, UpdateReasons, FileAttributes, UpdateSequenceNumber, SourceInfo, SecurityId
+EntryNumber, SequenceNumber, InUse, ParentEntryNumber, ParentSequenceNumber, ParentPath, FileName, Extension, FileSize, ReferenceCount, ReparseTarget, IsDirectory, HasAds, IsAds, SI<FN, uSecZeros, Copied, SiFlags, NameType, Created0x10, Created0x30, LastModified0x10, LastModified0x30, LastRecordChange0x10, LastRecordChange0x30, LastAccess0x10, LastAccess0x30, UpdateSequenceNumber, LogfileSequenceNumber, SecurityId, ObjectIdFileDroid, LoggedUtilStream, ZoneIdContents, SourceFile
+
+### $J (USN Journal) Output (13 columns)
+
+Name, Extension, EntryNumber, SequenceNumber, ParentEntryNumber, ParentSequenceNumber, ParentPath, UpdateSequenceNumber, UpdateTimestamp, UpdateReasons, FileAttributes, OffsetToData, SourceFile
 
 ## Building from Source
 

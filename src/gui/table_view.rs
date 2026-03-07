@@ -4,7 +4,7 @@ use eframe::egui;
 use egui_extras::{Column, TableBuilder};
 
 use crate::core::resident::ResidentEntry;
-use crate::core::types::format_datetime_opt;
+use crate::core::types::format_timestamp_filetime;
 
 /// Which column to sort by.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -138,10 +138,10 @@ pub fn draw_table(
                     ui.label(format_size(entry.data_size));
                 });
                 row.col(|ui| {
-                    ui.label(format_datetime_opt(&entry.si_created));
+                    ui.label(format_timestamp_filetime(entry.si_created));
                 });
                 row.col(|ui| {
-                    ui.label(format_datetime_opt(&entry.si_modified));
+                    ui.label(format_timestamp_filetime(entry.si_modified));
                 });
                 row.col(|ui| {
                     ui.label(&entry.stream_name);

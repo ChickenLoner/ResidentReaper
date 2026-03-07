@@ -19,33 +19,34 @@ pub struct UsnRecord {
     pub source_info: u32,
     pub security_id: u32,
     pub file_attributes: u32,
+    pub offset_to_data: i64, // Offset within the USN journal file
 }
 
-/// USN reason flag definitions matching MFTECmd output strings.
+/// USN reason flag definitions matching MFTECmd output strings (C# enum names).
 const USN_REASONS: &[(u32, &str)] = &[
-    (0x00000001, "DATA_OVERWRITE"),
-    (0x00000002, "DATA_EXTEND"),
-    (0x00000004, "DATA_TRUNCATION"),
-    (0x00000010, "NAMED_DATA_OVERWRITE"),
-    (0x00000020, "NAMED_DATA_EXTEND"),
-    (0x00000040, "NAMED_DATA_TRUNCATION"),
-    (0x00000100, "FILE_CREATE"),
-    (0x00000200, "FILE_DELETE"),
-    (0x00000400, "EA_CHANGE"),
-    (0x00000800, "SECURITY_CHANGE"),
-    (0x00001000, "RENAME_OLD_NAME"),
-    (0x00002000, "RENAME_NEW_NAME"),
-    (0x00004000, "INDEXABLE_CHANGE"),
-    (0x00008000, "BASIC_INFO_CHANGE"),
-    (0x00010000, "HARD_LINK_CHANGE"),
-    (0x00020000, "COMPRESSION_CHANGE"),
-    (0x00040000, "ENCRYPTION_CHANGE"),
-    (0x00080000, "OBJECT_ID_CHANGE"),
-    (0x00100000, "REPARSE_POINT_CHANGE"),
-    (0x00200000, "STREAM_CHANGE"),
-    (0x00400000, "TRANSACTED_CHANGE"),
-    (0x00800000, "INTEGRITY_CHANGE"),
-    (0x80000000, "CLOSE"),
+    (0x00000001, "DataOverwrite"),
+    (0x00000002, "DataExtend"),
+    (0x00000004, "DataTruncation"),
+    (0x00000010, "NamedDataOverwrite"),
+    (0x00000020, "NamedDataExtend"),
+    (0x00000040, "NamedDataTruncation"),
+    (0x00000100, "FileCreate"),
+    (0x00000200, "FileDelete"),
+    (0x00000400, "EaChange"),
+    (0x00000800, "SecurityChange"),
+    (0x00001000, "RenameOldName"),
+    (0x00002000, "RenameNewName"),
+    (0x00004000, "IndexableChange"),
+    (0x00008000, "BasicInfoChange"),
+    (0x00010000, "HardLinkChange"),
+    (0x00020000, "CompressionChange"),
+    (0x00040000, "EncryptionChange"),
+    (0x00080000, "ObjectIdChange"),
+    (0x00100000, "ReparsePointChange"),
+    (0x00200000, "StreamChange"),
+    (0x00400000, "TransactedChange"),
+    (0x00800000, "IntegrityChange"),
+    (0x80000000, "Close"),
 ];
 
 /// Source info flag definitions.
@@ -57,7 +58,15 @@ const USN_SOURCE_INFO: &[(u32, &str)] = &[
 ];
 
 /// Decode USN reason flags to pipe-separated string.
+/// Matches C# [Flags] enum ToString(): if unknown bits present, output raw integer.
 pub fn decode_reason(reason: u32) -> String {
+    if reason == 0 {
+        return String::new();
+    }
+    let known_bits: u32 = USN_REASONS.iter().map(|(f, _)| *f).fold(0u32, |a, b| a | b);
+    if reason & !known_bits != 0 {
+        return reason.to_string();
+    }
     let mut flags = Vec::new();
     for &(flag, name) in USN_REASONS {
         if reason & flag != 0 {
@@ -152,6 +161,16 @@ where
     Ok(count)
 }
 
+/// Extract file extension with leading dot (matching C# Path.GetExtension).
+fn extract_extension_dotted(filename: &str) -> String {
+    if let Some(pos) = filename.rfind('.') {
+        if pos < filename.len() - 1 {
+            return filename[pos..].to_string();
+        }
+    }
+    String::new()
+}
+
 /// Parse a USN_RECORD_V2 at the given offset.
 fn parse_usn_v2(data: &[u8], offset: usize, _record_len: usize) -> Result<UsnRecord> {
     // V2 layout:
@@ -194,7 +213,7 @@ fn parse_usn_v2(data: &[u8], offset: usize, _record_len: usize) -> Result<UsnRec
         return Err(SpecterError::UsnParse("Filename extends beyond data".into()));
     }
     let name = decode_utf16le(&data[name_start..name_end]);
-    let extension = super::types::extract_extension(&name);
+    let extension = extract_extension_dotted(&name);
 
     Ok(UsnRecord {
         name,
@@ -209,6 +228,7 @@ fn parse_usn_v2(data: &[u8], offset: usize, _record_len: usize) -> Result<UsnRec
         source_info,
         security_id,
         file_attributes,
+        offset_to_data: offset as i64,
     })
 }
 
@@ -258,7 +278,7 @@ fn parse_usn_v3(data: &[u8], offset: usize, _record_len: usize) -> Result<UsnRec
         return Err(SpecterError::UsnParse("V3 filename extends beyond data".into()));
     }
     let name = decode_utf16le(&data[name_start..name_end]);
-    let extension = super::types::extract_extension(&name);
+    let extension = extract_extension_dotted(&name);
 
     Ok(UsnRecord {
         name,
@@ -273,6 +293,7 @@ fn parse_usn_v3(data: &[u8], offset: usize, _record_len: usize) -> Result<UsnRec
         source_info,
         security_id,
         file_attributes,
+        offset_to_data: offset as i64,
     })
 }
 

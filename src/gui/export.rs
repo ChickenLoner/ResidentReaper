@@ -50,6 +50,20 @@ pub fn bytes_to_hex(data: &[u8]) -> String {
         .join(" ")
 }
 
+/// Convert resident data bytes to an ASCII string for clipboard.
+/// Non-printable bytes are replaced with '.'.
+pub fn bytes_to_ascii(data: &[u8]) -> String {
+    data.iter()
+        .map(|&b| {
+            if b.is_ascii_graphic() || b == b' ' {
+                b as char
+            } else {
+                '.'
+            }
+        })
+        .collect()
+}
+
 /// Sanitize a filename by replacing invalid characters.
 fn sanitize_filename(name: &str) -> String {
     name.chars()

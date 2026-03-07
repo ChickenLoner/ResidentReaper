@@ -265,6 +265,50 @@ impl eframe::App for ResidentHunterApp {
             }
         });
 
+        // Hex viewer panel (shown when exactly one entry is selected)
+        if self.selected.len() == 1 {
+            if let Some(&idx) = self.selected.iter().next() {
+                let entry = &self.entries[idx];
+                egui::TopBottomPanel::bottom("hex_panel")
+                    .resizable(true)
+                    .default_height(200.0)
+                    .min_height(100.0)
+                    .max_height(400.0)
+                    .show(ctx, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.strong(format!(
+                                "Hex View: {} ({} bytes)",
+                                entry.file_name, entry.data_size
+                            ));
+                            if ui.button("Copy Hex").clicked() {
+                                let hex = export::bytes_to_hex(&entry.data);
+                                ctx.copy_text(hex);
+                                self.status_message = "Hex copied to clipboard.".to_string();
+                            }
+                            if ui.button("Copy ASCII").clicked() {
+                                let ascii = export::bytes_to_ascii(&entry.data);
+                                ctx.copy_text(ascii);
+                                self.status_message = "ASCII copied to clipboard.".to_string();
+                            }
+                            if ui.button("Copy Hex Dump").clicked() {
+                                let dump = format_hex_dump(&entry.data);
+                                ctx.copy_text(dump);
+                                self.status_message = "Hex dump copied to clipboard.".to_string();
+                            }
+                        });
+                        ui.separator();
+                        egui::ScrollArea::vertical().show(ui, |ui| {
+                            ui.add(
+                                egui::TextEdit::multiline(&mut format_hex_dump(&entry.data).as_str())
+                                    .font(egui::TextStyle::Monospace)
+                                    .desired_width(f32::INFINITY)
+                                    .interactive(false),
+                            );
+                        });
+                    });
+            }
+        }
+
         // Bottom panel: export buttons
         egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -291,19 +335,6 @@ impl eframe::App for ResidentHunterApp {
                     .clicked()
                 {
                     self.export_filtered();
-                }
-
-                if ui
-                    .add_enabled(
-                        selected_count == 1,
-                        egui::Button::new("Copy Hex to Clipboard"),
-                    )
-                    .clicked()
-                {
-                    if let Some(&idx) = self.selected.iter().next() {
-                        let hex = export::bytes_to_hex(&self.entries[idx].data);
-                        ctx.copy_text(hex);
-                    }
                 }
 
                 ui.separator();
@@ -393,4 +424,41 @@ impl ResidentHunterApp {
             }
         }
     }
+}
+
+/// Format bytes as a classic hex dump: offset | hex bytes | ASCII
+fn format_hex_dump(data: &[u8]) -> String {
+    let mut result = String::new();
+    for (i, chunk) in data.chunks(16).enumerate() {
+        let offset = i * 16;
+        result.push_str(&format!("{:08X}  ", offset));
+
+        // Hex bytes
+        for (j, byte) in chunk.iter().enumerate() {
+            result.push_str(&format!("{:02X} ", byte));
+            if j == 7 {
+                result.push(' ');
+            }
+        }
+        // Pad if less than 16 bytes
+        if chunk.len() < 16 {
+            for j in chunk.len()..16 {
+                result.push_str("   ");
+                if j == 7 {
+                    result.push(' ');
+                }
+            }
+        }
+
+        result.push_str(" |");
+        for byte in chunk {
+            if byte.is_ascii_graphic() || *byte == b' ' {
+                result.push(*byte as char);
+            } else {
+                result.push('.');
+            }
+        }
+        result.push_str("|\n");
+    }
+    result
 }

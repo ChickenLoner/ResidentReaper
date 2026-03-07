@@ -11,9 +11,9 @@ use crate::core::types::format_timestamp_filetime;
 pub enum SortColumn {
     EntryNumber,
     FileName,
-    Extension,
-    ParentPath,
     DataSize,
+    Extension,
+    FullPath,
     Created,
     Modified,
     StreamName,
@@ -22,6 +22,15 @@ pub enum SortColumn {
 impl Default for SortColumn {
     fn default() -> Self {
         SortColumn::EntryNumber
+    }
+}
+
+/// Build full path string from parent_path and file_name.
+pub fn full_path(entry: &ResidentEntry) -> String {
+    if entry.parent_path.is_empty() || entry.parent_path == "." {
+        entry.file_name.clone()
+    } else {
+        format!("{}\\{}", entry.parent_path, entry.file_name)
     }
 }
 
@@ -39,16 +48,17 @@ pub fn draw_table(
 
     let available_height = ui.available_height() - 40.0; // Reserve space for bottom bar
 
+    egui::ScrollArea::horizontal().show(ui, |ui| {
     TableBuilder::new(ui)
         .striped(true)
         .resizable(true)
         .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
         .column(Column::exact(30.0)) // Checkbox
         .column(Column::initial(80.0).at_least(60.0)) // Entry#
-        .column(Column::initial(200.0).at_least(100.0)) // FileName
-        .column(Column::initial(60.0).at_least(40.0)) // Ext
-        .column(Column::initial(250.0).at_least(100.0)) // ParentPath
+        .column(Column::initial(180.0).at_least(100.0)) // FileName
         .column(Column::initial(80.0).at_least(60.0)) // Size
+        .column(Column::initial(60.0).at_least(40.0)) // Ext
+        .column(Column::initial(400.0).at_least(200.0)) // FullPath
         .column(Column::initial(180.0).at_least(120.0)) // Created
         .column(Column::initial(180.0).at_least(120.0)) // Modified
         .column(Column::initial(100.0).at_least(60.0)) // Stream
@@ -76,9 +86,9 @@ pub fn draw_table(
             let columns = [
                 ("Entry#", SortColumn::EntryNumber),
                 ("FileName", SortColumn::FileName),
-                ("Ext", SortColumn::Extension),
-                ("ParentPath", SortColumn::ParentPath),
                 ("Size", SortColumn::DataSize),
+                ("Ext", SortColumn::Extension),
+                ("FullPath", SortColumn::FullPath),
                 ("Created", SortColumn::Created),
                 ("Modified", SortColumn::Modified),
                 ("Stream", SortColumn::StreamName),
@@ -129,13 +139,13 @@ pub fn draw_table(
                     ui.label(&entry.file_name);
                 });
                 row.col(|ui| {
+                    ui.label(format_size(entry.data_size));
+                });
+                row.col(|ui| {
                     ui.label(&entry.extension);
                 });
                 row.col(|ui| {
-                    ui.label(&entry.parent_path);
-                });
-                row.col(|ui| {
-                    ui.label(format_size(entry.data_size));
+                    ui.label(full_path(entry));
                 });
                 row.col(|ui| {
                     ui.label(format_timestamp_filetime(entry.si_created));
@@ -148,6 +158,7 @@ pub fn draw_table(
                 });
             });
         });
+    }); // end horizontal ScrollArea
 
     selection_changed
 }
@@ -168,7 +179,7 @@ pub fn sort_indices(
             SortColumn::EntryNumber => ea.entry_number.cmp(&eb.entry_number),
             SortColumn::FileName => ea.file_name.to_lowercase().cmp(&eb.file_name.to_lowercase()),
             SortColumn::Extension => ea.extension.cmp(&eb.extension),
-            SortColumn::ParentPath => ea.parent_path.to_lowercase().cmp(&eb.parent_path.to_lowercase()),
+            SortColumn::FullPath => full_path(ea).to_lowercase().cmp(&full_path(eb).to_lowercase()),
             SortColumn::DataSize => ea.data_size.cmp(&eb.data_size),
             SortColumn::Created => ea.si_created.cmp(&eb.si_created),
             SortColumn::Modified => ea.si_modified.cmp(&eb.si_modified),

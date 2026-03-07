@@ -4,30 +4,31 @@ use crate::core::resident::ResidentEntry;
 
 #[derive(Default)]
 pub struct FilterState {
-    pub name_filter: String,
+    pub search_filter: String,
     pub extension_filter: String,
     pub min_size: String,
     pub max_size: String,
-    pub path_filter: String,
 }
 
 impl FilterState {
     pub fn is_active(&self) -> bool {
-        !self.name_filter.is_empty()
+        !self.search_filter.is_empty()
             || !self.extension_filter.is_empty()
             || !self.min_size.is_empty()
             || !self.max_size.is_empty()
-            || !self.path_filter.is_empty()
     }
 
     pub fn matches(&self, entry: &ResidentEntry) -> bool {
-        if !self.name_filter.is_empty()
-            && !entry
-                .file_name
-                .to_lowercase()
-                .contains(&self.name_filter.to_lowercase())
-        {
-            return false;
+        if !self.search_filter.is_empty() {
+            let query = self.search_filter.to_lowercase();
+            let full_path = if entry.parent_path.is_empty() || entry.parent_path == "." {
+                entry.file_name.to_lowercase()
+            } else {
+                format!("{}\\{}", entry.parent_path, entry.file_name).to_lowercase()
+            };
+            if !full_path.contains(&query) {
+                return false;
+            }
         }
 
         if !self.extension_filter.is_empty() {
@@ -54,15 +55,6 @@ impl FilterState {
             }
         }
 
-        if !self.path_filter.is_empty()
-            && !entry
-                .parent_path
-                .to_lowercase()
-                .contains(&self.path_filter.to_lowercase())
-        {
-            return false;
-        }
-
         true
     }
 
@@ -78,8 +70,11 @@ impl FilterState {
             ui.label("Filters:");
             ui.separator();
 
-            ui.label("Name:");
-            if ui.text_edit_singleline(&mut self.name_filter).changed() {
+            ui.label("Search:");
+            if ui
+                .add(egui::TextEdit::singleline(&mut self.search_filter).desired_width(200.0))
+                .changed()
+            {
                 changed = true;
             }
 
@@ -104,11 +99,6 @@ impl FilterState {
                 egui::TextEdit::singleline(&mut self.max_size).desired_width(60.0),
             );
             if max_response.changed() {
-                changed = true;
-            }
-
-            ui.label("Path:");
-            if ui.text_edit_singleline(&mut self.path_filter).changed() {
                 changed = true;
             }
 

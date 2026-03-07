@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ChickenLoner/ResidentReaper/releases"><img src="https://img.shields.io/github/v/release/ChickenLoner/ResidentReaper?style=flat-square" alt="Release"/></a>
+  <a href="https://github.com/ChickenLoner/ResidentReaper/releases"><img src="https://img.shields.io/github/v/release/ChickenLoner/ResidentReaper?style=flat-square&cacheSeconds=60" alt="Release"/></a>
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-blue?style=flat-square" alt="Platform"/>
   <img src="https://img.shields.io/badge/language-Rust-orange?style=flat-square" alt="Rust"/>
 </p>

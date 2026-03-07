@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ChickenLoner/ResidentReaper/releases"><img src="https://img.shields.io/github/v/release/ChickenLoner/ResidentReaper?style=flat-square&cacheSeconds=60" alt="Release"/></a>
+  <img src="https://img.shields.io/badge/version-1.0.0-green?style=flat-square" alt="Version"/>
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-blue?style=flat-square" alt="Platform"/>
   <img src="https://img.shields.io/badge/language-Rust-orange?style=flat-square" alt="Rust"/>
 </p>
@@ -25,8 +25,8 @@ It operates in three modes:
 | Mode | Description |
 |------|-------------|
 | **`mft`** | Parses `$MFT` to CSV with output compatible with MFTECmd (99.997% cell accuracy, identical row counts). |
-| **`usn`** | Parses `$J` (USN Journal) to CSV with MFTECmd-compatible output. Optionally resolves parent paths via `$MFT`. |
-| **`hunt`** | GUI mode — scans MFT entries for resident data (files stored inline), browse/filter/export them. |
+| **`usn`** | Parses `$J` (USN Journal) to CSV with MFTECmd-compatible output. Optionally resolves parent paths via `$MFT` and outputs MFT CSV as well. |
+| **`hunt`** | GUI mode — scans MFT entries for resident data (files stored inline), browse/filter/export them with inline hex viewer. |
 
 ### MFTECmd Compatibility
 
@@ -57,45 +57,67 @@ Grab the latest binaries from the [Releases](https://github.com/ChickenLoner/Res
 ### Parse $MFT to CSV
 
 ```bash
-ResidentReaper mft -f <path_to_$MFT> -o output.csv
+# Auto-named output (e.g., 20260308120000_MFT_Output.csv)
+ResidentReaper mft -f $MFT
+
+# Custom output path
+ResidentReaper mft -f $MFT -o mft_output.csv
+
+# Allocated entries only
+ResidentReaper mft -f $MFT --allocated-only
 ```
 
 ### Parse $J (USN Journal) to CSV
 
 ```bash
-ResidentReaper usn -f <path_to_$J> -o usn_output.csv
+# Auto-named output (e.g., 20260308120000_J_Output.csv)
+ResidentReaper usn -f $J
+
+# With parent path resolution (also outputs MFT CSV)
+ResidentReaper usn -f $J --mft $MFT
+
+# Custom output path
+ResidentReaper usn -f $J -o usn.csv --mft $MFT
 ```
 
-### Parse $J with parent path resolution (provide $MFT)
-
-```bash
-ResidentReaper usn -f <path_to_$J> -o usn_output.csv --mft <path_to_$MFT>
-```
+When `--mft` is provided, ResidentReaper parses the MFT in a single pass to both resolve parent paths for USN records and produce a full MFT CSV output alongside the USN CSV.
 
 ### Resident Hunter (GUI)
 
 ```bash
 ResidentReaper hunt
 # Or pre-load an MFT file:
-ResidentReaper hunt -f <path_to_$MFT>
+ResidentReaper hunt -f $MFT
 ```
 
 The GUI lets you:
 - Scan an `$MFT` for resident data (files stored directly inside MFT entries)
-- Browse results in a sortable, filterable table
-- Filter by filename, extension, size range, or path
+- Browse results in a sortable, filterable table with horizontal scrolling
+- Search by full path (combined parent path + filename)
+- Filter by extension and size range
+- View resident data inline with a hex dump viewer
+- Copy hex, ASCII, or full hex dump to clipboard
 - Select and export resident files to a directory
-- Copy hex data to clipboard
 
 ### Options
 
 | Flag | Description |
 |------|-------------|
 | `-f, --file` | Path to the artifact file (required) |
-| `-o, --output` | Path to the output CSV file (required) |
-| `--allocated-only` | Only output allocated (in-use) MFT entries |
-| `--mft <path>` | (usn mode) Provide $MFT to resolve parent paths |
+| `-o, --output` | Path to output CSV file (auto-named with timestamp if omitted) |
+| `--allocated-only` | Only output allocated (in-use) MFT entries (mft mode) |
+| `--mft <path>` | Provide $MFT to resolve parent paths and output MFT CSV (usn mode) |
 | `-v, --verbose` | Increase logging verbosity |
+
+### Default Output Filenames
+
+If `-o` is not specified, output files are auto-named with a timestamp:
+
+| Mode | Default Filename |
+|------|-----------------|
+| `mft` | `<yyyyMMddHHmmss>_MFT_Output.csv` |
+| `usn` | `<yyyyMMddHHmmss>_J_Output.csv` |
+| `usn --mft` | Both `_J_Output.csv` and `_MFT_Output.csv` |
 
 ## CSV Output Columns
 

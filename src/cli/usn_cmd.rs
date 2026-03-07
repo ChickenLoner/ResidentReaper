@@ -13,6 +13,9 @@ use crate::core::usn_parser;
 use super::UsnArgs;
 
 pub fn run(args: UsnArgs) -> Result<()> {
+    let auto_named = args.output.is_none();
+    let output = args.output.unwrap_or_else(|| super::default_output_name("J"));
+
     eprintln!(
         "ResidentReaper - Parsing $J: {}",
         args.file.display()
@@ -22,8 +25,8 @@ pub fn run(args: UsnArgs) -> Result<()> {
     let parent_paths = if let Some(ref mft_path) = args.mft {
         eprintln!("Loading $MFT for path resolution: {}", mft_path.display());
 
-        // Derive MFT output path from USN output path
-        let mft_output = derive_mft_output_path(&args.output);
+        // Derive MFT output path: use timestamp-based name in same directory as USN output
+        let mft_output = derive_mft_output_path(&output, auto_named);
         eprintln!("Also writing MFT output to: {}", mft_output.display());
 
         let mft_source_file = mft_path.display().to_string();
@@ -101,7 +104,7 @@ pub fn run(args: UsnArgs) -> Result<()> {
     );
 
     // Set up CSV writer
-    let file = File::create(&args.output)?;
+    let file = File::create(&output)?;
     let buf_writer = BufWriter::new(file);
     let mut csv_writer = csv::Writer::from_writer(buf_writer);
 
@@ -135,23 +138,29 @@ pub fn run(args: UsnArgs) -> Result<()> {
     eprintln!(
         "Complete. {} USN records written to {}",
         count,
-        args.output.display()
+        output.display()
     );
 
     Ok(())
 }
 
-/// Derive MFT output CSV path from the USN output path.
-/// e.g., "output/usn.csv" -> "output/usn_MFT_Output.csv"
-fn derive_mft_output_path(usn_output: &std::path::Path) -> std::path::PathBuf {
-    let stem = usn_output
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("output");
-    let ext = usn_output
-        .extension()
-        .and_then(|s| s.to_str())
-        .unwrap_or("csv");
-    let mft_name = format!("{}_MFT_Output.{}", stem, ext);
-    usn_output.with_file_name(mft_name)
+/// Derive MFT output CSV path.
+/// If auto-named (no -o given), use timestamp format in same directory.
+/// If user specified -o, derive from that name: e.g., "usn.csv" -> "usn_MFT_Output.csv"
+fn derive_mft_output_path(usn_output: &std::path::Path, auto_named: bool) -> std::path::PathBuf {
+    if auto_named {
+        let dir = usn_output.parent().unwrap_or(std::path::Path::new("."));
+        dir.join(super::default_output_name("MFT"))
+    } else {
+        let stem = usn_output
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("output");
+        let ext = usn_output
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("csv");
+        let mft_name = format!("{}_MFT_Output.{}", stem, ext);
+        usn_output.with_file_name(mft_name)
+    }
 }

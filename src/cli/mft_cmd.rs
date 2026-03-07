@@ -10,6 +10,8 @@ use crate::core::types::Result;
 use super::MftArgs;
 
 pub fn run(args: MftArgs) -> Result<()> {
+    let output = args.output.unwrap_or_else(|| super::default_output_name("MFT"));
+
     eprintln!(
         "ResidentReaper - Parsing $MFT: {}",
         args.file.display()
@@ -27,7 +29,7 @@ pub fn run(args: MftArgs) -> Result<()> {
     );
 
     // Set up CSV writer
-    let file = File::create(&args.output)?;
+    let file = File::create(&output)?;
     let buf_writer = BufWriter::new(file);
     let mut csv_writer = csv::Writer::from_writer(buf_writer);
 
@@ -56,7 +58,7 @@ pub fn run(args: MftArgs) -> Result<()> {
     eprintln!(
         "Complete. {} entries written to {}",
         count,
-        args.output.display()
+        output.display()
     );
 
     Ok(())

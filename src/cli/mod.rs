@@ -3,6 +3,7 @@ pub mod usn_cmd;
 
 use std::path::PathBuf;
 
+use chrono::Local;
 use clap::{Parser, Subcommand};
 
 use crate::core::types::Result;
@@ -24,17 +25,20 @@ MODES:
   hunt  Launch Resident Hunter GUI to browse/export resident data
 
 EXAMPLES:
-  Parse $MFT to CSV:
+  Parse $MFT to CSV (auto-named output):
+    ResidentReaper mft -f \\$MFT
+
+  Parse $MFT to CSV (custom output):
     ResidentReaper mft -f \\$MFT -o mft_output.csv
 
   Parse $MFT (allocated entries only):
-    ResidentReaper mft -f \\$MFT -o mft_output.csv --allocated-only
+    ResidentReaper mft -f \\$MFT --allocated-only
 
-  Parse USN Journal:
-    ResidentReaper usn -f \\$J -o usn_output.csv
+  Parse USN Journal (auto-named output):
+    ResidentReaper usn -f \\$J
 
   Parse USN Journal with path resolution (also outputs MFT CSV):
-    ResidentReaper usn -f \\$J -o usn_output.csv --mft \\$MFT
+    ResidentReaper usn -f \\$J --mft \\$MFT
 
   Launch Resident Hunter GUI:
     ResidentReaper hunt
@@ -58,6 +62,11 @@ OUTPUT DETAILS:
     ParentSequenceNumber, ParentPath, UpdateSequenceNumber,
     UpdateTimestamp, UpdateReasons, FileAttributes, OffsetToData,
     SourceFile
+
+DEFAULT OUTPUT:
+  If -o is not specified, output files are auto-named with a timestamp:
+    mft mode:  <yyyyMMddHHmmss>_MFT_Output.csv
+    usn mode:  <yyyyMMddHHmmss>_J_Output.csv
 
 NOTE:
   When using 'usn --mft', the MFT is parsed in a single pass to both
@@ -116,9 +125,9 @@ pub struct MftArgs {
     #[arg(short, long)]
     pub file: PathBuf,
 
-    /// Path to output CSV file
+    /// Path to output CSV file [default: <timestamp>_MFT_Output.csv]
     #[arg(short, long)]
-    pub output: PathBuf,
+    pub output: Option<PathBuf>,
 
     /// Only output allocated (in-use) entries
     #[arg(long, default_value_t = false)]
@@ -135,9 +144,9 @@ pub struct UsnArgs {
     #[arg(short, long)]
     pub file: PathBuf,
 
-    /// Path to output CSV file
+    /// Path to output CSV file [default: <timestamp>_J_Output.csv]
     #[arg(short, long)]
-    pub output: PathBuf,
+    pub output: Option<PathBuf>,
 
     /// Provide $MFT to resolve parent paths and also output MFT CSV
     #[arg(long)]
@@ -146,6 +155,13 @@ pub struct UsnArgs {
     /// Increase logging verbosity
     #[arg(short, long, action = clap::ArgAction::Count)]
     pub verbose: u8,
+}
+
+/// Generate a timestamped default output filename.
+/// Format: `yyyyMMddHHmmss_<label>_Output.csv`
+pub fn default_output_name(label: &str) -> PathBuf {
+    let ts = Local::now().format("%Y%m%d%H%M%S");
+    PathBuf::from(format!("{}_{}_Output.csv", ts, label))
 }
 
 #[derive(clap::Args)]

@@ -38,7 +38,7 @@ EXAMPLES:
     ResidentReaper usn -f \\$J
 
   Parse USN Journal with path resolution (also outputs MFT CSV):
-    ResidentReaper usn -f \\$J --mft \\$MFT
+    ResidentReaper usn -f \\$J -m \\$MFT
 
   Launch Resident Hunter GUI:
     ResidentReaper hunt
@@ -97,7 +97,7 @@ Detects ADS (Alternate Data Streams) and extracts Zone.Identifier content."
 Parse an NTFS $J (USN Journal / UsnJrnl:$J) file and output a CSV
 with 13 columns, compatible with MFTECmd output format.
 
-When --mft is provided:
+When -m/--mft is provided:
   - Parent paths are resolved using the MFT
   - A full MFT CSV is also produced (saved as <output>_MFT_Output.csv)"
     )]

@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.0.0-green?style=flat-square" alt="Version"/>
+  <img src="https://img.shields.io/badge/version-1.1.0-green?style=flat-square" alt="Version"/>
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-blue?style=flat-square" alt="Platform"/>
   <img src="https://img.shields.io/badge/language-Rust-orange?style=flat-square" alt="Rust"/>
 </p>
@@ -74,13 +74,13 @@ ResidentReaper mft -f $MFT --allocated-only
 ResidentReaper usn -f $J
 
 # With parent path resolution (also outputs MFT CSV)
-ResidentReaper usn -f $J --mft $MFT
+ResidentReaper usn -f $J -m $MFT
 
 # Custom output path
-ResidentReaper usn -f $J -o usn.csv --mft $MFT
+ResidentReaper usn -f $J -o usn.csv -m $MFT
 ```
 
-When `--mft` is provided, ResidentReaper parses the MFT in a single pass to both resolve parent paths for USN records and produce a full MFT CSV output alongside the USN CSV.
+When `-m` / `--mft` is provided, ResidentReaper parses the MFT in a single pass to both resolve parent paths for USN records and produce a full MFT CSV output alongside the USN CSV.
 
 ### Resident Hunter (GUI)
 
@@ -106,7 +106,7 @@ The GUI lets you:
 | `-f, --file` | Path to the artifact file (required) |
 | `-o, --output` | Path to output CSV file (auto-named with timestamp if omitted) |
 | `--allocated-only` | Only output allocated (in-use) MFT entries (mft mode) |
-| `--mft <path>` | Provide $MFT to resolve parent paths and output MFT CSV (usn mode) |
+| `-m, --mft <path>` | Provide $MFT to resolve parent paths and output MFT CSV (usn mode) |
 | `-v, --verbose` | Increase logging verbosity |
 
 ### Default Output Filenames
@@ -128,6 +128,37 @@ EntryNumber, SequenceNumber, InUse, ParentEntryNumber, ParentSequenceNumber, Par
 ### $J (USN Journal) Output (13 columns)
 
 Name, Extension, EntryNumber, SequenceNumber, ParentEntryNumber, ParentSequenceNumber, ParentPath, UpdateSequenceNumber, UpdateTimestamp, UpdateReasons, FileAttributes, OffsetToData, SourceFile
+
+## Analysis Scripts
+
+The `scripts/` directory contains standalone Python analysis scripts that work with ResidentReaper's CSV output. No dependencies required — Python 3.8+ stdlib only.
+
+| Script | Input | Description |
+|--------|-------|-------------|
+| `timeline.py` | MFT and/or USN CSV | Unified chronological timeline from all MFT timestamps and USN events. Supports `--start`, `--end`, `--path`, `--ext` filters. |
+| `usn_activity.py` | USN CSV | USN Journal activity analysis: reason summaries, hourly heatmap, busiest dates, directory hotspots. |
+| `prefetch_activity.py` | USN CSV | Program execution timeline from `.pf` (Prefetch) file activity in USN Journal. |
+| `download_detector.py` | USN CSV | Detects files downloaded via **certutil** (CryptnetUrlCache + INetCache correlation) and **BITS** (BIT*.tmp rename chains). |
+| `user_files.py` | MFT CSV | Lists all files in Downloads, Desktop, and Documents per user profile. |
+
+### Examples
+
+```bash
+# Build a timeline from MFT + USN
+python scripts/timeline.py --mft mft.csv --usn usn.csv --start 2025-01-01
+
+# USN activity summary
+python scripts/usn_activity.py -f usn.csv --top-dirs 30
+
+# Prefetch execution timeline
+python scripts/prefetch_activity.py -f usn.csv
+
+# Detect certutil/BITS downloads
+python scripts/download_detector.py -f usn.csv
+
+# List user files (Downloads, Desktop, Documents)
+python scripts/user_files.py -f mft.csv --include-deleted
+```
 
 ## Building from Source
 

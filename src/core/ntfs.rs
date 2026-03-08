@@ -96,24 +96,36 @@ pub fn decode_si_flags(flags: u32) -> String {
         return (flags as i32).to_string();
     }
 
-    let mut parts = Vec::new();
-    if flags & 0x0001 != 0 { parts.push("ReadOnly"); }
-    if flags & 0x0002 != 0 { parts.push("Hidden"); }
-    if flags & 0x0004 != 0 { parts.push("System"); }
-    if flags & 0x0020 != 0 { parts.push("Archive"); }
-    if flags & 0x0040 != 0 { parts.push("Device"); }
-    if flags & 0x0080 != 0 { parts.push("Normal"); }
-    if flags & 0x0100 != 0 { parts.push("Temporary"); }
-    if flags & 0x0200 != 0 { parts.push("SparseFile"); }
-    if flags & 0x0400 != 0 { parts.push("ReparsePoint"); }
-    if flags & 0x0800 != 0 { parts.push("Compressed"); }
-    if flags & 0x1000 != 0 { parts.push("Offline"); }
-    if flags & 0x2000 != 0 { parts.push("NotContentIndexed"); }
-    if flags & 0x4000 != 0 { parts.push("Encrypted"); }
-    if flags & 0x1000_0000 != 0 { parts.push("IsDirectory"); }
-    if flags & 0x2000_0000 != 0 { parts.push("IsIndexView"); }
-    if flags & 0x0004_0000 != 0 { parts.push("RecallOnOpen"); }
-    parts.join("|")
+    let mut buf = String::with_capacity(64);
+    let mut first = true;
+
+    macro_rules! flag {
+        ($mask:expr, $name:expr) => {
+            if flags & $mask != 0 {
+                if !first { buf.push('|'); }
+                buf.push_str($name);
+                first = false;
+            }
+        };
+    }
+
+    flag!(0x0001, "ReadOnly");
+    flag!(0x0002, "Hidden");
+    flag!(0x0004, "System");
+    flag!(0x0020, "Archive");
+    flag!(0x0040, "Device");
+    flag!(0x0080, "Normal");
+    flag!(0x0100, "Temporary");
+    flag!(0x0200, "SparseFile");
+    flag!(0x0400, "ReparsePoint");
+    flag!(0x0800, "Compressed");
+    flag!(0x1000, "Offline");
+    flag!(0x2000, "NotContentIndexed");
+    flag!(0x4000, "Encrypted");
+    flag!(0x1000_0000, "IsDirectory");
+    flag!(0x2000_0000, "IsIndexView");
+    flag!(0x0004_0000, "RecallOnOpen");
+    buf
 }
 
 /// FILE_NAME namespace values.
@@ -146,13 +158,22 @@ impl FileNamespace {
     }
 }
 
-/// Decode UTF-16LE bytes to a String.
+/// Decode UTF-16LE bytes to a String without intermediate Vec allocation.
 pub fn decode_utf16le(data: &[u8]) -> String {
-    let u16s: Vec<u16> = data
-        .chunks_exact(2)
-        .map(|c| u16::from_le_bytes([c[0], c[1]]))
-        .collect();
-    String::from_utf16_lossy(&u16s)
+    let char_count = data.len() / 2;
+    if char_count <= 128 {
+        let mut buf = [0u16; 128];
+        for (i, chunk) in data.chunks_exact(2).enumerate() {
+            buf[i] = u16::from_le_bytes([chunk[0], chunk[1]]);
+        }
+        String::from_utf16_lossy(&buf[..char_count])
+    } else {
+        let u16s: Vec<u16> = data
+            .chunks_exact(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect();
+        String::from_utf16_lossy(&u16s)
+    }
 }
 
 /// Format a GUID from 16 raw bytes into standard string form.

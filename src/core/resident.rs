@@ -52,7 +52,7 @@ where
         if end > data.len() {
             break;
         }
-        let entry = match MftEntry::from_buffer(data[offset..end].to_vec(), entry_idx as u64) {
+        let entry = match MftEntry::from_slice(&data[offset..end], entry_idx as u64) {
             Ok(e) => e,
             Err(_) => continue,
         };
@@ -82,7 +82,7 @@ where
             break;
         }
 
-        let entry = match MftEntry::from_buffer(data[offset..end].to_vec(), entry_idx as u64) {
+        let entry = match MftEntry::from_slice(&data[offset..end], entry_idx as u64) {
             Ok(e) => e,
             Err(_) => continue,
         };

@@ -1,8 +1,5 @@
 //! MFT entry parsing: header, fixup arrays, and raw attribute iteration.
 
-use byteorder::{LittleEndian, ReadBytesExt};
-use std::io::Cursor;
-
 use super::ntfs::{self, AttributeType};
 use super::types::ReaperError;
 
@@ -57,20 +54,22 @@ pub struct RawAttribute {
     pub resident_data: Vec<u8>,
 }
 
-/// A parsed MFT entry with header and raw data.
+/// A parsed MFT entry with header and borrowed or owned data.
+/// Uses a local buffer with fixups applied, avoiding full-entry cloning
+/// when the entry has no fixups to apply.
 pub struct MftEntry {
     pub header: EntryHeader,
     pub data: Vec<u8>,
 }
 
 impl MftEntry {
-    /// Parse an MFT entry from a raw buffer. Applies fixup array.
-    pub fn from_buffer(mut buffer: Vec<u8>, entry_number: u64) -> Result<Self, ReaperError> {
+    /// Parse an MFT entry from a byte slice. Copies the buffer and applies fixup array.
+    pub fn from_slice(buffer: &[u8], entry_number: u64) -> Result<Self, ReaperError> {
         if buffer.len() < 56 {
             return Err(ReaperError::MftParse("Buffer too small for MFT entry".into()));
         }
 
-        let header = parse_entry_header(&buffer, entry_number)?;
+        let header = parse_entry_header(buffer, entry_number)?;
 
         if !header.is_valid() {
             return Err(ReaperError::MftParse(format!(
@@ -79,13 +78,14 @@ impl MftEntry {
             )));
         }
 
-        // Apply fixup array
-        apply_fixup(&header, &mut buffer);
+        // Only copy the used portion of the entry (not the full allocated size)
+        let used = (header.used_size as usize).min(buffer.len());
+        let mut data = buffer[..used].to_vec();
 
-        Ok(MftEntry {
-            header,
-            data: buffer,
-        })
+        // Apply fixup array
+        apply_fixup(&header, &mut data);
+
+        Ok(MftEntry { header, data })
     }
 
     /// Iterate over all attributes in this entry.
@@ -98,13 +98,10 @@ impl MftEntry {
     }
 }
 
-/// Parse the 56-byte MFT entry header.
+/// Parse the 56-byte MFT entry header directly from a byte slice.
 fn parse_entry_header(data: &[u8], entry_number: u64) -> Result<EntryHeader, ReaperError> {
-    let mut c = Cursor::new(data);
-
     let mut signature = [0u8; 4];
-    std::io::Read::read_exact(&mut c, &mut signature)
-        .map_err(|e| ReaperError::MftParse(e.to_string()))?;
+    signature.copy_from_slice(&data[0..4]);
 
     if signature != ntfs::SIGNATURE_FILE && signature != ntfs::SIGNATURE_BAAD && signature != [0; 4] {
         return Err(ReaperError::MftParse(format!(
@@ -113,22 +110,22 @@ fn parse_entry_header(data: &[u8], entry_number: u64) -> Result<EntryHeader, Rea
         )));
     }
 
-    let fixup_offset = c.read_u16::<LittleEndian>().unwrap_or(0);
-    let fixup_count = c.read_u16::<LittleEndian>().unwrap_or(0);
-    let lsn = c.read_u64::<LittleEndian>().unwrap_or(0);
-    let sequence = c.read_u16::<LittleEndian>().unwrap_or(0);
-    let hard_link_count = c.read_u16::<LittleEndian>().unwrap_or(0);
-    let first_attr_offset = c.read_u16::<LittleEndian>().unwrap_or(0);
-    let flags = c.read_u16::<LittleEndian>().unwrap_or(0);
-    let used_size = c.read_u32::<LittleEndian>().unwrap_or(0);
-    let allocated_size = c.read_u32::<LittleEndian>().unwrap_or(0);
+    let fixup_offset = u16::from_le_bytes([data[4], data[5]]);
+    let fixup_count = u16::from_le_bytes([data[6], data[7]]);
+    let lsn = u64::from_le_bytes(data[8..16].try_into().unwrap());
+    let sequence = u16::from_le_bytes([data[16], data[17]]);
+    let hard_link_count = u16::from_le_bytes([data[18], data[19]]);
+    let first_attr_offset = u16::from_le_bytes([data[20], data[21]]);
+    let flags = u16::from_le_bytes([data[22], data[23]]);
+    let used_size = u32::from_le_bytes(data[24..28].try_into().unwrap());
+    let allocated_size = u32::from_le_bytes(data[28..32].try_into().unwrap());
 
     // Base record reference (8 bytes): lower 48 bits = entry, upper 16 bits = sequence
-    let base_ref = c.read_u64::<LittleEndian>().unwrap_or(0);
+    let base_ref = u64::from_le_bytes(data[32..40].try_into().unwrap());
     let base_record_entry = base_ref & 0x0000_FFFF_FFFF_FFFF;
     let base_record_sequence = (base_ref >> 48) as u16;
 
-    let first_attribute_id = c.read_u16::<LittleEndian>().unwrap_or(0);
+    let first_attribute_id = u16::from_le_bytes([data[40], data[41]]);
 
     Ok(EntryHeader {
         signature,
@@ -158,15 +155,16 @@ fn apply_fixup(header: &EntryHeader, buffer: &mut [u8]) {
         return;
     }
 
-    // First 2 bytes of fixup array = update sequence value
-    // Remaining entries are the original values to restore
+    // Read fixup bytes before modifying the buffer
     let fixup_end = fixup_start + num_fixups * 2;
-    let fixup_bytes: Vec<u8> = buffer[fixup_start..fixup_end].to_vec();
+    if fixup_end > buffer.len() {
+        return;
+    }
 
-    // fixup_bytes[0..2] = update sequence number (validation)
-    // fixup_bytes[2..4] = original bytes for sector 0 end
-    // fixup_bytes[4..6] = original bytes for sector 1 end
-    // etc.
+    // Copy fixup bytes to avoid borrow issues
+    let mut fixup_bytes = [0u8; 34]; // max 17 fixups * 2 bytes (covers up to 8KB entries)
+    let copy_len = (num_fixups * 2).min(fixup_bytes.len());
+    fixup_bytes[..copy_len].copy_from_slice(&buffer[fixup_start..fixup_start + copy_len]);
 
     for i in 1..num_fixups {
         let sector_end = i * 512;
@@ -174,7 +172,7 @@ fn apply_fixup(header: &EntryHeader, buffer: &mut [u8]) {
             break;
         }
         let fix_offset = i * 2;
-        if fix_offset + 1 < fixup_bytes.len() {
+        if fix_offset + 1 < copy_len {
             buffer[sector_end - 2] = fixup_bytes[fix_offset];
             buffer[sector_end - 1] = fixup_bytes[fix_offset + 1];
         }

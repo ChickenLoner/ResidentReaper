@@ -1,6 +1,5 @@
 use std::path::Path;
 
-use byteorder::{LittleEndian, ReadBytesExt};
 use memmap2::Mmap;
 
 use super::types::{Result, ReaperError};
@@ -67,13 +66,16 @@ pub fn decode_reason(reason: u32) -> String {
     if reason & !known_bits != 0 {
         return reason.to_string();
     }
-    let mut flags = Vec::new();
+    let mut buf = String::with_capacity(64);
+    let mut first = true;
     for &(flag, name) in USN_REASONS {
         if reason & flag != 0 {
-            flags.push(name);
+            if !first { buf.push('|'); }
+            buf.push_str(name);
+            first = false;
         }
     }
-    flags.join("|")
+    buf
 }
 
 /// Decode USN source info flags to pipe-separated string.
@@ -81,13 +83,16 @@ pub fn decode_source_info(source: u32) -> String {
     if source == 0 {
         return String::new();
     }
-    let mut flags = Vec::new();
+    let mut buf = String::with_capacity(64);
+    let mut first = true;
     for &(flag, name) in USN_SOURCE_INFO {
         if source & flag != 0 {
-            flags.push(name);
+            if !first { buf.push('|'); }
+            buf.push_str(name);
+            first = false;
         }
     }
-    flags.join("|")
+    buf
 }
 
 /// Parse a $J (USN Journal) file and yield records via callback.
@@ -318,33 +323,43 @@ fn skip_zeros(data: &[u8], mut offset: usize) -> usize {
     offset
 }
 
-/// Decode UTF-16LE bytes to a String.
+/// Decode UTF-16LE bytes to a String without intermediate Vec allocation.
 fn decode_utf16le(data: &[u8]) -> String {
-    let u16s: Vec<u16> = data
-        .chunks_exact(2)
-        .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
-        .collect();
-    String::from_utf16_lossy(&u16s)
+    // Use a stack buffer for small filenames (up to 128 chars covers 99%+ of cases)
+    let char_count = data.len() / 2;
+    if char_count <= 128 {
+        let mut buf = [0u16; 128];
+        for (i, chunk) in data.chunks_exact(2).enumerate() {
+            buf[i] = u16::from_le_bytes([chunk[0], chunk[1]]);
+        }
+        String::from_utf16_lossy(&buf[..char_count])
+    } else {
+        let u16s: Vec<u16> = data
+            .chunks_exact(2)
+            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+            .collect();
+        String::from_utf16_lossy(&u16s)
+    }
 }
 
-// Helper functions for reading little-endian values from a byte slice.
+// Inline helper functions for reading little-endian values directly from byte slices.
 
+#[inline(always)]
 fn read_u16_le(data: &[u8], offset: usize) -> u16 {
-    let mut cursor = std::io::Cursor::new(&data[offset..offset + 2]);
-    cursor.read_u16::<LittleEndian>().unwrap_or(0)
+    u16::from_le_bytes([data[offset], data[offset + 1]])
 }
 
+#[inline(always)]
 fn read_u32_le(data: &[u8], offset: usize) -> u32 {
-    let mut cursor = std::io::Cursor::new(&data[offset..offset + 4]);
-    cursor.read_u32::<LittleEndian>().unwrap_or(0)
+    u32::from_le_bytes([data[offset], data[offset + 1], data[offset + 2], data[offset + 3]])
 }
 
+#[inline(always)]
 fn read_u64_le(data: &[u8], offset: usize) -> u64 {
-    let mut cursor = std::io::Cursor::new(&data[offset..offset + 8]);
-    cursor.read_u64::<LittleEndian>().unwrap_or(0)
+    u64::from_le_bytes(data[offset..offset + 8].try_into().unwrap())
 }
 
+#[inline(always)]
 fn read_i64_le(data: &[u8], offset: usize) -> i64 {
-    let mut cursor = std::io::Cursor::new(&data[offset..offset + 8]);
-    cursor.read_i64::<LittleEndian>().unwrap_or(0)
+    i64::from_le_bytes(data[offset..offset + 8].try_into().unwrap())
 }

@@ -101,7 +101,7 @@ where
             break;
         }
 
-        let entry = match MftEntry::from_buffer(data[offset..end].to_vec(), entry_idx as u64) {
+        let entry = match MftEntry::from_slice(&data[offset..end], entry_idx as u64) {
             Ok(e) => e,
             Err(_) => continue,
         };
@@ -141,10 +141,7 @@ where
             if ext_end > data.len() {
                 continue;
             }
-            let ext_entry = match MftEntry::from_buffer(
-                data[ext_offset..ext_end].to_vec(),
-                ext_num,
-            ) {
+            let ext_entry = match MftEntry::from_slice(&data[ext_offset..ext_end], ext_num) {
                 Ok(e) => e,
                 Err(_) => continue,
             };
@@ -175,7 +172,7 @@ where
             break;
         }
 
-        let entry = match MftEntry::from_buffer(data[offset..end].to_vec(), entry_idx as u64) {
+        let entry = match MftEntry::from_slice(&data[offset..end], entry_idx as u64) {
             Ok(e) => e,
             Err(_) => {
                 processed += 1;
@@ -219,8 +216,8 @@ where
                 if ext_end > data.len() {
                     continue;
                 }
-                let ext_entry = match MftEntry::from_buffer(
-                    data[ext_offset..ext_end].to_vec(),
+                let ext_entry = match MftEntry::from_slice(
+                    &data[ext_offset..ext_end],
                     ext_entry_num,
                 ) {
                     Ok(e) => e,
@@ -297,33 +294,26 @@ where
                 None => (0, 0, 0, 0, 0, 0, 0),
             };
 
-        let reparse_target = reparse.map(|r| r.target).unwrap_or_default();
-        let logged_util_str = logged_util.map(|l| l.stream_name).unwrap_or_default();
-        let object_id_str = object_id.map(|o| o.object_id).unwrap_or_default();
+        let mut reparse_target = reparse.map(|r| r.target).unwrap_or_default();
+        let mut logged_util_str = logged_util.map(|l| l.stream_name).unwrap_or_default();
+        let mut object_id_str = object_id.map(|o| o.object_id).unwrap_or_default();
+
+        // Pre-compute values constant across all FN iterations
+        let record_number = entry.header.record_number;
+        let seq_number = entry.header.sequence_number;
+        let lsn = entry.header.logfile_sequence_number;
+
+        // Filter out DOS-only FN attributes upfront
+        let emit_fns: Vec<&FileNameInfo> = fn_attrs.iter()
+            .filter(|f| f.name_type != ntfs::FileNamespace::Dos)
+            .collect();
+        let is_last_fn = emit_fns.len() == 1;
 
         // Emit one row per FN attribute (MFTECmd behavior)
-        for fn_info in &fn_attrs {
-            // Skip DOS-only names (MFTECmd default: includeShort=false)
-            if fn_info.name_type == ntfs::FileNamespace::Dos {
-                continue;
-            }
+        for (fn_idx, fn_info) in emit_fns.iter().enumerate() {
+            let last_fn = is_last_fn || fn_idx == emit_fns.len() - 1;
 
-            let parent_path = match full_paths.get(&fn_info.parent_entry) {
-                Some(p) if p == "." || fn_info.parent_entry == 5 => ".".to_string(),
-                Some(p) => format!(".\\{}", p),
-                None => {
-                    // Use path from our path map if parent is known
-                    full_paths
-                        .get(&(entry_idx as u64))
-                        .and_then(|p| {
-                            p.rfind('\\').map(|pos| {
-                                let parent = &p[..pos];
-                                if parent == "." { ".".to_string() } else { format!(".\\{}", parent) }
-                            })
-                        })
-                        .unwrap_or_else(|| ".".to_string())
-                }
-            };
+            let parent_path = resolve_parent_path(&full_paths, fn_info.parent_entry, entry_idx as u64);
 
             let extension = if !is_dir {
                 extract_extension_dotted(&fn_info.name)
@@ -339,41 +329,41 @@ where
                 let fr = if fn_info.record_modified != si_record_modified { fn_info.record_modified } else { 0 };
                 (fc, fm, fa, fr)
             } else {
-                // No SI: put FN timestamps in 0x30 columns, and also some in 0x10 columns
-                // MFTECmd: mftr.Created0x30 = fn.CreatedOn; mftr.LastModified0x10 = fn.ContentModifiedOn; etc.
                 (fn_info.created, fn_info.modified, fn_info.accessed, fn_info.record_modified)
             };
 
-            // For entries without SI, MFTECmd puts FN timestamps in 0x10 columns for modified/access/record
+            // For entries without SI, MFTECmd puts FN timestamps in 0x10 columns
             let (eff_si_created, eff_si_modified, eff_si_accessed, eff_si_record_modified) = if si.is_some() {
                 (si_created, si_modified, si_accessed, si_record_modified)
             } else {
                 (0, fn_info.modified, fn_info.record_modified, fn_info.accessed)
             };
 
-            // Forensic flags (MFTECmd logic)
-            // Timestomped: SI Created < FN Created (only when FN created is in output)
-            let timestomped = if fn_created != 0 && si_created != 0 {
-                si_created < fn_created
-            } else {
-                false
-            };
-
-            // uSecZeros: Created0x10 or LastModified0x10 has millisecond == 0
-            // MFTECmd checks .Millisecond == 0 on the DateTimeOffset
+            let timestomped = fn_created != 0 && si_created != 0 && si_created < fn_created;
             let usec_zeros = has_millisecond_zero(eff_si_created)
                 || has_millisecond_zero(eff_si_modified);
+            let copied = si_modified != 0 && si_created != 0 && si_modified < si_created;
 
-            // Copied: SI ContentModified < SI Created
-            let copied = if si_modified != 0 && si_created != 0 {
-                si_modified < si_created
+            // On the last FN iteration, move strings instead of cloning
+            let (rt, oid, lus, sf) = if last_fn && ads.is_empty() {
+                (
+                    std::mem::take(&mut reparse_target),
+                    std::mem::take(&mut object_id_str),
+                    std::mem::take(&mut logged_util_str),
+                    mft_path_str.clone(),
+                )
             } else {
-                false
+                (
+                    reparse_target.clone(),
+                    object_id_str.clone(),
+                    logged_util_str.clone(),
+                    mft_path_str.clone(),
+                )
             };
 
             let info = MftEntryInfo {
-                entry_number: entry.header.record_number,
-                sequence_number: entry.header.sequence_number,
+                entry_number: record_number,
+                sequence_number: seq_number,
                 in_use,
                 parent_entry_number: fn_info.parent_entry,
                 parent_sequence_number: fn_info.parent_sequence,
@@ -382,7 +372,7 @@ where
                 extension,
                 file_size,
                 reference_count,
-                reparse_target: reparse_target.clone(),
+                reparse_target: rt,
                 is_directory: is_dir,
                 has_ads,
                 is_ads: false,
@@ -400,18 +390,18 @@ where
                 fn_accessed,
                 fn_record_modified,
                 usn,
-                logfile_sequence_number: entry.header.logfile_sequence_number,
+                logfile_sequence_number: lsn,
                 security_id,
-                object_id_file_droid: object_id_str.clone(),
-                logged_util_stream: logged_util_str.clone(),
-                zone_id_contents: String::new(), // Only on ADS rows
-                source_file: mft_path_str.clone(),
+                object_id_file_droid: oid,
+                logged_util_stream: lus,
+                zone_id_contents: String::new(),
+                source_file: sf,
             };
 
             callback(info)?;
 
             // Emit ADS rows after each FN row
-            for da in &ads {
+            for (ads_idx, da) in ads.iter().enumerate() {
                 let ads_ext = extract_extension_dotted(&da.stream_name);
                 let ads_zone = if da.stream_name == "Zone.Identifier" {
                     zone_id_contents.clone()
@@ -419,18 +409,32 @@ where
                     String::new()
                 };
 
+                let ads_parent = resolve_parent_path(&full_paths, fn_info.parent_entry, entry_idx as u64);
+
+                // Move on last ADS of last FN
+                let (ads_oid, ads_lus, ads_sf) = if last_fn && ads_idx == ads.len() - 1 {
+                    (
+                        std::mem::take(&mut object_id_str),
+                        std::mem::take(&mut logged_util_str),
+                        mft_path_str.clone(),
+                    )
+                } else {
+                    (object_id_str.clone(), logged_util_str.clone(), mft_path_str.clone())
+                };
+
+                let mut ads_filename = String::with_capacity(fn_info.name.len() + 1 + da.stream_name.len());
+                ads_filename.push_str(&fn_info.name);
+                ads_filename.push(':');
+                ads_filename.push_str(&da.stream_name);
+
                 let ads_info = MftEntryInfo {
-                    entry_number: entry.header.record_number,
-                    sequence_number: entry.header.sequence_number,
+                    entry_number: record_number,
+                    sequence_number: seq_number,
                     in_use,
                     parent_entry_number: fn_info.parent_entry,
                     parent_sequence_number: fn_info.parent_sequence,
-                    parent_path: match full_paths.get(&fn_info.parent_entry) {
-                        Some(p) if p == "." || fn_info.parent_entry == 5 => ".".to_string(),
-                        Some(p) => format!(".\\{}", p),
-                        None => ".".to_string(),
-                    },
-                    file_name: format!("{}:{}", fn_info.name, da.stream_name),
+                    parent_path: ads_parent,
+                    file_name: ads_filename,
                     extension: ads_ext,
                     file_size: da.data_size,
                     reference_count,
@@ -452,12 +456,12 @@ where
                     fn_accessed,
                     fn_record_modified,
                     usn,
-                    logfile_sequence_number: entry.header.logfile_sequence_number,
+                    logfile_sequence_number: lsn,
                     security_id,
-                    object_id_file_droid: object_id_str.clone(),
-                    logged_util_stream: logged_util_str.clone(),
+                    object_id_file_droid: ads_oid,
+                    logged_util_stream: ads_lus,
                     zone_id_contents: ads_zone,
-                    source_file: mft_path_str.clone(),
+                    source_file: ads_sf,
                 };
                 callback(ads_info)?;
             }
@@ -467,6 +471,37 @@ where
     }
 
     Ok(processed)
+}
+
+/// Resolve parent path for an FN attribute's parent_entry.
+fn resolve_parent_path(full_paths: &HashMap<u64, String>, parent_entry: u64, entry_idx: u64) -> String {
+    match full_paths.get(&parent_entry) {
+        Some(p) if p == "." || parent_entry == 5 => ".".to_string(),
+        Some(p) => {
+            let mut s = String::with_capacity(2 + p.len());
+            s.push_str(".\\");
+            s.push_str(p);
+            s
+        }
+        None => {
+            full_paths
+                .get(&entry_idx)
+                .and_then(|p| {
+                    p.rfind('\\').map(|pos| {
+                        let parent = &p[..pos];
+                        if parent == "." {
+                            ".".to_string()
+                        } else {
+                            let mut s = String::with_capacity(2 + parent.len());
+                            s.push_str(".\\");
+                            s.push_str(parent);
+                            s
+                        }
+                    })
+                })
+                .unwrap_or_else(|| ".".to_string())
+        }
+    }
 }
 
 /// Get the total number of entries in an MFT file.

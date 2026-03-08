@@ -30,7 +30,7 @@ pub fn run(args: MftArgs) -> Result<()> {
 
     // Set up CSV writer
     let file = File::create(&output)?;
-    let buf_writer = BufWriter::new(file);
+    let buf_writer = BufWriter::with_capacity(256 * 1024, file);
     let mut csv_writer = csv::Writer::from_writer(buf_writer);
 
     let mut count: u64 = 0;

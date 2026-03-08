@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufWriter;
 
@@ -22,16 +21,15 @@ pub fn run(args: UsnArgs) -> Result<()> {
     );
 
     // Optionally parse MFT: build parent path lookup AND write MFT CSV
-    let parent_paths = if let Some(ref mft_path) = args.mft {
+    // Use Vec indexed by entry number for O(1) lookup instead of HashMap
+    let parent_paths: Vec<String> = if let Some(ref mft_path) = args.mft {
         eprintln!("Loading $MFT for path resolution: {}", mft_path.display());
 
         // Derive MFT output path: use timestamp-based name in same directory as USN output
         let mft_output = derive_mft_output_path(&output, auto_named);
         eprintln!("Also writing MFT output to: {}", mft_output.display());
 
-        let mft_source_file = mft_path.display().to_string();
-
-        // Get total entry count for progress bar
+        // Get total entry count for progress bar and pre-allocate Vec
         let total = mft_parser::get_entry_count(mft_path)?;
         let pb = ProgressBar::new(total);
         pb.set_style(
@@ -43,21 +41,32 @@ pub fn run(args: UsnArgs) -> Result<()> {
 
         // Set up MFT CSV writer
         let mft_file = File::create(&mft_output)?;
-        let mft_buf = BufWriter::new(mft_file);
+        let mft_buf = BufWriter::with_capacity(256 * 1024, mft_file);
         let mut mft_csv_writer = csv::Writer::from_writer(mft_buf);
 
-        let mut map = HashMap::new();
+        // Pre-allocate Vec with empty strings — indexed by entry number
+        let mut path_vec: Vec<String> = vec![String::new(); total as usize];
         let mut mft_count: u64 = 0;
 
         mft_parser::parse_mft_entries(mft_path, false, |info| {
             // Build path map from non-ADS entries
             if !info.is_ads {
-                let full_path = if info.parent_path == "." {
-                    format!(".\\{}", info.file_name)
-                } else {
-                    format!("{}\\{}", info.parent_path, info.file_name)
-                };
-                map.insert(info.entry_number, full_path);
+                let idx = info.entry_number as usize;
+                if idx < path_vec.len() {
+                    let full_path = if info.parent_path == "." {
+                        let mut s = String::with_capacity(2 + info.file_name.len());
+                        s.push_str(".\\");
+                        s.push_str(&info.file_name);
+                        s
+                    } else {
+                        let mut s = String::with_capacity(info.parent_path.len() + 1 + info.file_name.len());
+                        s.push_str(&info.parent_path);
+                        s.push('\\');
+                        s.push_str(&info.file_name);
+                        s
+                    };
+                    path_vec[idx] = full_path;
+                }
             }
 
             // Write MFT CSV row
@@ -85,9 +94,9 @@ pub fn run(args: UsnArgs) -> Result<()> {
             mft_output.display()
         );
 
-        map
+        path_vec
     } else {
-        HashMap::new()
+        Vec::new()
     };
 
     // Source file name (MFTECmd uses the path as provided on command line)
@@ -105,16 +114,24 @@ pub fn run(args: UsnArgs) -> Result<()> {
 
     // Set up CSV writer
     let file = File::create(&output)?;
-    let buf_writer = BufWriter::new(file);
+    let buf_writer = BufWriter::with_capacity(256 * 1024, file);
     let mut csv_writer = csv::Writer::from_writer(buf_writer);
 
     let mut count: u64 = 0;
+    let has_paths = !parent_paths.is_empty();
 
     usn_parser::parse_usn_journal(&args.file, |record| {
-        let parent_path = parent_paths
-            .get(&record.parent_entry_number)
-            .cloned()
-            .unwrap_or_default();
+        // O(1) Vec index lookup instead of HashMap::get + clone
+        let parent_path = if has_paths {
+            let idx = record.parent_entry_number as usize;
+            if idx < parent_paths.len() {
+                parent_paths[idx].clone()
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
 
         let row = UsnCsvRow::from_record(record, parent_path, source_file.clone());
         csv_writer.serialize(&row).map_err(|e| {

@@ -149,7 +149,7 @@ pub struct UsnArgs {
     pub output: Option<PathBuf>,
 
     /// Provide $MFT to resolve parent paths and also output MFT CSV
-    #[arg(long)]
+    #[arg(short, long)]
     pub mft: Option<PathBuf>,
 
     /// Increase logging verbosity

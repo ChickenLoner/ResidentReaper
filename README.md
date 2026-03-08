@@ -41,7 +41,7 @@ ResidentReaper's CSV output is designed to be a drop-in replacement for MFTECmd:
 | Forensic flags | SI<FN, uSecZeros, Copied | N/A |
 | ADS detection | Zone.Identifier extraction | N/A |
 
-*ParentPath differences due to sequence number validation for reused MFT entries — our tool resolves the current path while MFTECmd shows `PathUnknown`.
+*Remaining differences are in the SourceFile column format only — forensic data is identical.
 
 ## Download
 
@@ -138,8 +138,8 @@ The `scripts/` directory contains standalone Python analysis scripts that work w
 | `timeline.py` | MFT and/or USN CSV | Unified chronological timeline from all MFT timestamps and USN events. Supports `--start`, `--end`, `--path`, `--ext` filters. |
 | `usn_activity.py` | USN CSV | USN Journal activity analysis: reason summaries, hourly heatmap, busiest dates, directory hotspots. |
 | `prefetch_activity.py` | USN CSV | Program execution timeline from `.pf` (Prefetch) file activity in USN Journal. |
-| `download_detector.py` | USN CSV | Detects files downloaded via **certutil** (CryptnetUrlCache + INetCache correlation) and **BITS** (BIT*.tmp rename chains). |
-| `user_files.py` | MFT CSV | Lists all files in Downloads, Desktop, and Documents per user profile. |
+| `lolbin_ingress.py` | USN CSV | Detects file ingress via **certutil** (CryptnetUrlCache + INetCache correlation) and **BITSAdmin** (BIT*.tmp rename chains). |
+| `user_files.py` | MFT + USN CSV | Tree view of user Desktop, Downloads, and Documents. Combines MFT (current files) with USN Journal (deleted file recovery). |
 
 ### Examples
 
@@ -153,11 +153,11 @@ python scripts/usn_activity.py -f usn.csv --top-dirs 30
 # Prefetch execution timeline
 python scripts/prefetch_activity.py -f usn.csv
 
-# Detect certutil/BITS downloads
-python scripts/download_detector.py -f usn.csv
+# Detect certutil/BITS file ingress
+python scripts/lolbin_ingress.py -f usn.csv
 
-# List user files (Downloads, Desktop, Documents)
-python scripts/user_files.py -f mft.csv --include-deleted
+# List user files with tree view (Desktop, Downloads, Documents)
+python scripts/user_files.py -f mft.csv --usn usn.csv --depth 2
 ```
 
 ## Building from Source

@@ -11,6 +11,12 @@ use crate::core::usn_parser;
 
 use super::UsnArgs;
 
+/// Path entry with sequence number for validation.
+struct PathInfo {
+    path: String,
+    sequence_number: u16,
+}
+
 pub fn run(args: UsnArgs) -> Result<()> {
     let auto_named = args.output.is_none();
     let output = args.output.unwrap_or_else(|| super::default_output_name("J"));
@@ -21,8 +27,8 @@ pub fn run(args: UsnArgs) -> Result<()> {
     );
 
     // Optionally parse MFT: build parent path lookup AND write MFT CSV
-    // Use Vec indexed by entry number for O(1) lookup instead of HashMap
-    let parent_paths: Vec<String> = if let Some(ref mft_path) = args.mft {
+    // Use Vec indexed by entry number for O(1) lookup
+    let parent_paths: Vec<Option<PathInfo>> = if let Some(ref mft_path) = args.mft {
         eprintln!("Loading $MFT for path resolution: {}", mft_path.display());
 
         // Derive MFT output path: use timestamp-based name in same directory as USN output
@@ -44,8 +50,8 @@ pub fn run(args: UsnArgs) -> Result<()> {
         let mft_buf = BufWriter::with_capacity(256 * 1024, mft_file);
         let mut mft_csv_writer = csv::Writer::from_writer(mft_buf);
 
-        // Pre-allocate Vec with empty strings — indexed by entry number
-        let mut path_vec: Vec<String> = vec![String::new(); total as usize];
+        // Pre-allocate Vec with None — indexed by entry number
+        let mut path_vec: Vec<Option<PathInfo>> = (0..total as usize).map(|_| None).collect();
         let mut mft_count: u64 = 0;
 
         mft_parser::parse_mft_entries(mft_path, false, |info| {
@@ -53,7 +59,11 @@ pub fn run(args: UsnArgs) -> Result<()> {
             if !info.is_ads {
                 let idx = info.entry_number as usize;
                 if idx < path_vec.len() {
-                    let full_path = if info.parent_path == "." {
+                    // Build full path, but handle root entry (entry 5) specially
+                    let full_path = if info.parent_path == "." && info.file_name == "." {
+                        // Root directory — path is just "."
+                        ".".to_string()
+                    } else if info.parent_path == "." {
                         let mut s = String::with_capacity(2 + info.file_name.len());
                         s.push_str(".\\");
                         s.push_str(&info.file_name);
@@ -65,7 +75,10 @@ pub fn run(args: UsnArgs) -> Result<()> {
                         s.push_str(&info.file_name);
                         s
                     };
-                    path_vec[idx] = full_path;
+                    path_vec[idx] = Some(PathInfo {
+                        path: full_path,
+                        sequence_number: info.sequence_number,
+                    });
                 }
             }
 
@@ -99,8 +112,13 @@ pub fn run(args: UsnArgs) -> Result<()> {
         Vec::new()
     };
 
-    // Source file name (MFTECmd uses the path as provided on command line)
-    let source_file = args.file.display().to_string();
+    // Source file name — MFTECmd normalizes to .\filename format
+    let source_file = {
+        let fname = args.file.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("$J");
+        format!(".\\{}", fname)
+    };
 
     // Get file size for progress
     let file_size = std::fs::metadata(&args.file)?.len();
@@ -121,13 +139,30 @@ pub fn run(args: UsnArgs) -> Result<()> {
     let has_paths = !parent_paths.is_empty();
 
     usn_parser::parse_usn_journal(&args.file, |record| {
-        // O(1) Vec index lookup instead of HashMap::get + clone
         let parent_path = if has_paths {
             let idx = record.parent_entry_number as usize;
             if idx < parent_paths.len() {
-                parent_paths[idx].clone()
+                match &parent_paths[idx] {
+                    Some(info) if info.sequence_number == record.parent_sequence_number => {
+                        // Sequence matches — use resolved path
+                        info.path.clone()
+                    }
+                    _ => {
+                        // Entry not found or sequence mismatch (reused MFT entry)
+                        // MFTECmd format: .\PathUnknown\Directory with ID 0xENTRY-SEQ
+                        format!(
+                            ".\\PathUnknown\\Directory with ID 0x{:08X}-{:08X}",
+                            record.parent_entry_number,
+                            record.parent_sequence_number
+                        )
+                    }
+                }
             } else {
-                String::new()
+                format!(
+                    ".\\PathUnknown\\Directory with ID 0x{:08X}-{:08X}",
+                    record.parent_entry_number,
+                    record.parent_sequence_number
+                )
             }
         } else {
             String::new()

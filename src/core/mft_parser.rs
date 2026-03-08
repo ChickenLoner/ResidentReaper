@@ -250,17 +250,24 @@ where
             .filter(|f| f.name_type != ntfs::FileNamespace::Dos)
             .count() as u16;
 
-        // Determine file size from unnamed DATA attribute
+        // Determine file size from unnamed DATA attribute.
+        // If no unnamed DATA exists but named streams do (e.g. $Secure, $UsnJrnl),
+        // MFTECmd uses the first named stream's size.
         let mut file_size: u64 = 0;
-        let mut has_named_data = false;
+        let mut first_named_size: u64 = 0;
+        let mut has_unnamed_data = false;
         for da in &data_attrs {
             if da.stream_name.is_empty() {
+                has_unnamed_data = true;
                 if file_size == 0 {
                     file_size = da.data_size;
                 }
-            } else {
-                has_named_data = true;
+            } else if first_named_size == 0 {
+                first_named_size = da.data_size;
             }
+        }
+        if !has_unnamed_data && file_size == 0 {
+            file_size = first_named_size;
         }
 
         // ADS = named DATA streams

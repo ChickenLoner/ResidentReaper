@@ -1,7 +1,7 @@
 [package]
 name = "resident-reaper"
 version = "1.1.0"
-edition = "2026"
+edition = "2021"
 description = "NTFS forensic tool - MFT/USN parser and resident data hunter"
 license = "MIT"
 

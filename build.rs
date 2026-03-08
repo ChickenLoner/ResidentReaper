@@ -16,8 +16,19 @@ fn main() {
     {
         let mut res = winres::WindowsResource::new();
         res.set_icon("icon.ico");
+
+        // File metadata — shown in Windows Explorer "Details" tab
+        res.set("FileDescription", "ResidentReaper - NTFS Forensic Parser");
+        res.set("ProductName", "ResidentReaper");
+        res.set("FileVersion", env!("CARGO_PKG_VERSION"));
+        res.set("ProductVersion", env!("CARGO_PKG_VERSION"));
+        res.set("CompanyName", "Warawut Manosong");
+        res.set("LegalCopyright", "Copyright \u{00a9} 2026 Warawut Manosong. MIT License.");
+        res.set("OriginalFilename", "resident-reaper.exe");
+        res.set("InternalName", "resident-reaper");
+
         if let Err(e) = res.compile() {
-            eprintln!("Warning: Failed to set Windows icon: {}", e);
+            eprintln!("Warning: Failed to set Windows resource: {}", e);
         }
     }
 }

@@ -34,24 +34,18 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Install GUI dependencies
+      - name: Install cargo-zigbuild and zig
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libgtk-3-dev \
-            libxcb-render0-dev \
-            libxcb-shape0-dev \
-            libxcb-xfixes0-dev \
-            libxkbcommon-dev \
-            libssl-dev \
-            libfontconfig1-dev
+          pip3 install ziglang
+          cargo install cargo-zigbuild
+          rustup target add x86_64-unknown-linux-gnu
 
-      - name: Build CLI + GUI
-        run: cargo build --release --features gui
+      - name: Build CLI (glibc 2.17 compatible)
+        run: cargo zigbuild --release --features cli --target x86_64-unknown-linux-gnu.2.17
 
       - name: Rename binary
         run: |
-          cp target/release/resident-reaper ResidentReaper
+          cp target/x86_64-unknown-linux-gnu/release/resident-reaper ResidentReaper
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

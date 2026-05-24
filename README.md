@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.1.0-green?style=flat-square" alt="Version"/>
+  <img src="https://img.shields.io/badge/version-1.2.0-green?style=flat-square" alt="Version"/>
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-blue?style=flat-square" alt="Platform"/>
   <img src="https://img.shields.io/badge/language-Rust-orange?style=flat-square" alt="Rust"/>
 </p>
@@ -25,7 +25,7 @@ It operates in three modes:
 | Mode | Description |
 |------|-------------|
 | **`mft`** | Parses `$MFT` to CSV with output compatible with MFTECmd (99.997% cell accuracy, identical row counts). |
-| **`usn`** | Parses `$J` (USN Journal) to CSV with MFTECmd-compatible output. Optionally resolves parent paths via `$MFT` and outputs MFT CSV as well. |
+| **`usn`** | Parses `$J` (USN Journal) to CSV with MFTECmd-compatible output. Performs **USN Rewind** by default — reconstructs historically accurate parent paths at the time of each event, resolving entries MFTECmd shows as `PathUnknown`. Optionally supplements with `$MFT` for entries absent from the journal. |
 | **`hunt`** | GUI mode — scans MFT entries for resident data (files stored inline), browse/filter/export them with inline hex viewer. |
 
 ### MFTECmd Compatibility
@@ -70,17 +70,22 @@ ResidentReaper mft -f $MFT --allocated-only
 ### Parse $J (USN Journal) to CSV
 
 ```bash
-# Auto-named output (e.g., 20260308120000_J_Output.csv)
+# Rewind active by default — resolves historical paths from the journal itself
 ResidentReaper usn -f $J
 
-# With parent path resolution (also outputs MFT CSV)
+# Rewind + MFT — fills entries absent from journal, also outputs MFT CSV
 ResidentReaper usn -f $J -m $MFT
 
 # Custom output path
 ResidentReaper usn -f $J -o usn.csv -m $MFT
+
+# Disable rewind — MFT-only path resolution (pre-v1.2 behavior)
+ResidentReaper usn -f $J -m $MFT --raw
 ```
 
-When `-m` / `--mft` is provided, ResidentReaper parses the MFT in a single pass to both resolve parent paths for USN records and produce a full MFT CSV output alongside the USN CSV.
+**USN Rewind** (default) walks the journal in reverse chronological order to reconstruct where files actually were at the time of each event — not just their current location. This resolves paths for deleted, renamed, and reallocated entries that MFTECmd marks as `PathUnknown`.
+
+When `-m` / `--mft` is provided, the MFT supplements rewind by filling in entries that never appeared in the journal. A full MFT CSV is also written alongside the USN output.
 
 ### Resident Hunter (GUI)
 
@@ -106,7 +111,8 @@ The GUI lets you:
 | `-f, --file` | Path to the artifact file (required) |
 | `-o, --output` | Path to output CSV file (auto-named with timestamp if omitted) |
 | `--allocated-only` | Only output allocated (in-use) MFT entries (mft mode) |
-| `-m, --mft <path>` | Provide $MFT to resolve parent paths and output MFT CSV (usn mode) |
+| `-m, --mft <path>` | Provide $MFT to supplement rewind and output MFT CSV (usn mode) |
+| `--raw` | Disable rewind — use MFT-only path resolution (usn mode) |
 | `-v, --verbose` | Increase logging verbosity |
 
 ### Default Output Filenames

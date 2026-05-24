@@ -15,10 +15,13 @@ Thumbs.db
 
 # Claude
 .claude/
+PLAN.md
 
 # Reference source code
 /MFTECmd/
 /MFT/
+/usnjrnl_rewind/
+/sample/
 
 # Environment
 .env

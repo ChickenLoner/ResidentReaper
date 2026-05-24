@@ -34,11 +34,14 @@ EXAMPLES:
   Parse $MFT (allocated entries only):
     ResidentReaper mft -f \\$MFT --allocated-only
 
-  Parse USN Journal (auto-named output):
+  Parse USN Journal with rewind (default, resolves historical paths):
     ResidentReaper usn -f \\$J
 
-  Parse USN Journal with path resolution (also outputs MFT CSV):
+  Parse USN Journal with rewind + MFT (also outputs MFT CSV):
     ResidentReaper usn -f \\$J -m \\$MFT
+
+  Parse USN Journal without rewind (MFT-only, current state):
+    ResidentReaper usn -f \\$J -m \\$MFT --raw
 
   Launch Resident Hunter GUI:
     ResidentReaper hunt
@@ -68,10 +71,12 @@ DEFAULT OUTPUT:
     mft mode:  <yyyyMMddHHmmss>_MFT_Output.csv
     usn mode:  <yyyyMMddHHmmss>_J_Output.csv
 
-NOTE:
-  When using 'usn --mft', the MFT is parsed in a single pass to both
-  resolve parent paths for USN records and produce a full MFT CSV output
-  (saved as <usn_output>_MFT_Output.csv alongside the USN output)."
+USN PATH RESOLUTION:
+  By default, rewind reconstructs the historical path at the time of each
+  event by walking the journal in reverse. This resolves paths for deleted
+  and renamed files that MFTECmd shows as PathUnknown.
+  When -m is given, MFT fills in entries absent from the journal entirely.
+  Use --raw to disable rewind and fall back to MFT-only (current state)."
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -97,8 +102,15 @@ Detects ADS (Alternate Data Streams) and extracts Zone.Identifier content."
 Parse an NTFS $J (USN Journal / UsnJrnl:$J) file and output a CSV
 with 13 columns, compatible with MFTECmd output format.
 
+By default, performs USN Rewind: builds a path index from the journal
+itself to resolve parent paths for deleted or reallocated MFT entries
+that MFTECmd shows as PathUnknown.
+
+  --raw       Disable rewind (use current MFT state only)
+  -m/--mft    Also resolve paths from $MFT and write MFT CSV output
+
 When -m/--mft is provided:
-  - Parent paths are resolved using the MFT
+  - Rewind resolves historical paths; MFT fills entries absent from journal
   - A full MFT CSV is also produced (saved as <output>_MFT_Output.csv)"
     )]
     Usn(UsnArgs),
@@ -151,6 +163,10 @@ pub struct UsnArgs {
     /// Provide $MFT to resolve parent paths and also output MFT CSV
     #[arg(short, long)]
     pub mft: Option<PathBuf>,
+
+    /// Disable rewind path reconstruction (MFT resolution still applies if -m given)
+    #[arg(long, default_value_t = false)]
+    pub raw: bool,
 
     /// Increase logging verbosity
     #[arg(short, long, action = clap::ArgAction::Count)]

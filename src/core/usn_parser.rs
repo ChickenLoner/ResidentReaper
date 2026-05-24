@@ -1,8 +1,26 @@
+use std::collections::HashMap;
 use std::path::Path;
 
 use memmap2::Mmap;
 
 use super::types::{Result, ReaperError};
+
+/// Entry in the rewind path map: name and parent reference for a given (entry, seq) allocation.
+pub struct UsnPathEntry {
+    pub name: String,
+    pub parent_entry_number: u64,
+    pub parent_sequence_number: u16,
+}
+
+/// Collect all USN records into a Vec for in-memory reverse-chronological processing.
+pub fn collect_records(usn_path: &Path) -> Result<Vec<UsnRecord>> {
+    let mut records = Vec::new();
+    parse_usn_journal(usn_path, |record| {
+        records.push(record);
+        Ok(())
+    })?;
+    Ok(records)
+}
 
 /// Parsed USN_RECORD_V2 entry.
 pub struct UsnRecord {
